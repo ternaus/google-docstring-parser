@@ -17,23 +17,24 @@ This module provides functions to parse Google-style docstrings into structured 
 """
 
 import re
+from typing import Any
 
 
-def _extract_sections(docstring: str) -> dict:
+def _extract_sections(docstring: str) -> dict[str, str]:
     """Extract sections from a docstring.
 
     Args:
-        docstring: The docstring to extract sections from
+        docstring (str): The docstring to extract sections from
 
     Returns:
         A dictionary mapping section names to their content
     """
-    sections = {}
+    sections: dict[str, str] = {}
     current_section = "description"
     lines = docstring.split("\n")
 
-    section_content = []
-    indent_level = None
+    section_content: list[str] = []
+    indent_level: int | None = None
 
     for _, line in enumerate(lines):
         stripped = line.strip()
@@ -70,11 +71,11 @@ def _extract_sections(docstring: str) -> dict:
     return sections
 
 
-def parse_google_docstring(docstring: str) -> dict:
+def parse_google_docstring(docstring: str) -> dict[str, Any]:
     """Parse a Google-style docstring into a structured dictionary.
 
     Args:
-        docstring: The docstring to parse
+        docstring (str): The docstring to parse
 
     Returns:
         A dictionary with parsed docstring sections
@@ -86,7 +87,7 @@ def parse_google_docstring(docstring: str) -> dict:
     docstring = docstring.strip()
 
     # Initialize result dictionary
-    result = {
+    result: dict[str, Any] = {
         "description": "",
         "args": [],
     }
@@ -108,19 +109,19 @@ def parse_google_docstring(docstring: str) -> dict:
     return result
 
 
-def _parse_args_section(args_text: str) -> list:
+def _parse_args_section(args_text: str) -> list[dict[str, str | None]]:
     """Parse the Args section of a Google-style docstring.
 
     Args:
-        args_text: The text content of the Args section
+        args_text (str): The text content of the Args section
 
     Returns:
         A list of dictionaries, each containing name, type, and description of a parameter
     """
-    args = []
-    current_arg = None
-    current_description_lines = []
-    indent_level = None
+    args: list[dict[str, str | None]] = []
+    current_arg: dict[str, str | None] | None = None
+    current_description_lines: list[str] = []
+    indent_level: int | None = None
 
     # Split the text into lines and process each line
     lines = args_text.split("\n")

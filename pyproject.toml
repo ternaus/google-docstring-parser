@@ -125,3 +125,9 @@ no_implicit_reexport = true
 
 # for strict mypy: (this is the tricky one :-))
 disallow_untyped_defs = true
+
+[tool.docstring_checker]
+paths = [ "google_docstring_parser", "tests" ]
+require_param_types = true
+exclude_files = [ "test_malformed_docstrings.py" ]
+verbose = false

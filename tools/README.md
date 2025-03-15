@@ -15,7 +15,7 @@ To use this hook in another project, add the following to your `.pre-commit-conf
   rev: v0.0.1  # Use the latest version
   hooks:
     - id: check-google-docstrings
-      args: ["your_package_directory", "other_directory_to_check"]  # Directories to check
+      additional_dependencies: ["tomli>=2.0.0"]  # Required for pyproject.toml configuration
 ```
 
 ### Installation
@@ -26,19 +26,50 @@ To use this hook in another project, add the following to your `.pre-commit-conf
 
 ### Configuration
 
-The hook accepts the following arguments:
+The hook is configured via pyproject.toml, following modern Python tooling conventions like those used by mypy, ruff, and other tools.
 
-- Positional arguments: List of directories to scan for Python files
-- `-v`, `--verbose`: Enable verbose output
+#### pyproject.toml Configuration
 
-### Example
+Add a `[tool.docstring_checker]` section to your pyproject.toml:
+
+```toml
+[tool.docstring_checker]
+# List of directories or files to scan for docstrings
+paths = ["src", "tests"]
+
+# Whether to require parameter types in docstrings
+require_param_types = true
+
+# List of filenames to exclude from checks
+# These can be just filenames (e.g., "conftest.py") or paths ending with the filename
+exclude_files = ["conftest.py", "__init__.py", "tests/fixtures/bad_docstrings.py"]
+
+# Whether to enable verbose output
+verbose = false
+```
+
+This approach has several advantages:
+- Keeps all your project configuration in one place
+- Follows modern Python tooling conventions (like mypy, ruff, black, etc.)
+- Makes it easier to maintain and update configuration
+- Provides better IDE support and documentation
+
+### Example Configuration
+
+```toml
+# pyproject.toml
+[tool.docstring_checker]
+paths = ["src", "tests"]
+require_param_types = true
+exclude_files = ["conftest.py", "__init__.py"]
+verbose = false
+```
 
 ```yaml
+# .pre-commit-config.yaml
 - repo: https://github.com/albumentations-team/google-docstring-parser
   rev: v0.0.1
   hooks:
     - id: check-google-docstrings
-      args: ["src", "tests"]
-      # Optional: add verbose flag
-      # args: ["src", "tests", "--verbose"]
+      additional_dependencies: ["tomli>=2.0.0"]
 ```

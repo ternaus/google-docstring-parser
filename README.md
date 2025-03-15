@@ -93,7 +93,27 @@ To use this hook in another project, add the following to your `.pre-commit-conf
   rev: v0.0.1  # Use the latest version
   hooks:
     - id: check-google-docstrings
-      args: ["your_package_directory", "other_directory_to_check"]  # Directories to check
+      additional_dependencies: ["tomli>=2.0.0"]  # Required for pyproject.toml configuration
 ```
+
+### Configuration
+
+The hook is configured via pyproject.toml, following modern Python tooling conventions like those used by mypy, ruff, and other tools.
+
+Add a `[tool.docstring_checker]` section to your pyproject.toml:
+
+```toml
+[tool.docstring_checker]
+paths = ["src", "tests"]                     # Directories or files to scan
+require_param_types = true                   # Require parameter types in docstrings
+exclude_files = ["conftest.py", "__init__.py"] # Files to exclude from checks
+verbose = false                              # Enable verbose output
+```
+
+This approach has several advantages:
+- Keeps all your project configuration in one place
+- Follows modern Python tooling conventions
+- Makes it easier to maintain and update configuration
+- Provides better IDE support and documentation
 
 For more details, see the [tools README](tools/README.md).

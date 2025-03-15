@@ -79,4 +79,7 @@ repos:
         language: python
         types: [python]
         pass_filenames: false
-        args: ["google_docstring_parser"]
+        require_serial: true
+        # Configuration is now in pyproject.toml
+        args: []
+        additional_dependencies: ["tomli>=2.0.0"]
