@@ -67,6 +67,16 @@ repos:
     rev: v1.15.0
     hooks:
       - id: mypy
-        files: ^(albucore|benchmark)/
+        files: ^(google_docstring_parser|tests)/
         args:
           [ --config-file=pyproject.toml ]
+  - repo: local
+    hooks:
+      - id: check-docstrings
+        name: Check docstrings can be parsed
+        description: Checks that docstrings in specified folders can be parsed with google_docstring_parser
+        entry: python -m tools.check_docstrings
+        language: python
+        types: [python]
+        pass_filenames: false
+        args: ["google_docstring_parser"]

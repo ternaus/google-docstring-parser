@@ -35,11 +35,19 @@ classifiers = [
   "Typing :: Typed",
 ]
 
+optional-dependencies.dev = [
+  "pre-commit>=3.5",
+  "pytest>=8.3.3",
+]
+
+[tool.setuptools]
+packages = [ "google_docstring_parser", "tools" ]
+
 [tool.setuptools.package-data]
 google_docstring_parser = [ "*.md" ]
 
 [tool.setuptools.exclude-package-data]
-"*" = [ "tests*", "tools*", "benchmark*", "conda.recipe*" ]
+"*" = [ "tests*", "benchmark*", "conda.recipe*" ]
 
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.

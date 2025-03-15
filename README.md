@@ -79,3 +79,21 @@ Output:
 ## License
 
 MIT
+
+## Pre-commit Hook
+
+This package includes a pre-commit hook that checks if Google-style docstrings in your codebase can be parsed correctly.
+
+### Usage in Other Projects
+
+To use this hook in another project, add the following to your `.pre-commit-config.yaml`:
+
+```yaml
+- repo: https://github.com/albumentations-team/google-docstring-parser
+  rev: v0.0.1  # Use the latest version
+  hooks:
+    - id: check-google-docstrings
+      args: ["your_package_directory", "other_directory_to_check"]  # Directories to check
+```
+
+For more details, see the [tools README](tools/README.md).

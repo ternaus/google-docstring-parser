@@ -1,0 +1,8 @@
+- id: check-google-docstrings
+  name: Check Google-style docstrings can be parsed
+  description: Checks that Google-style docstrings in specified folders can be parsed with google_docstring_parser
+  entry: python -m tools.check_docstrings
+  language: python
+  types: [python]
+  pass_filenames: false
+  require_serial: true
