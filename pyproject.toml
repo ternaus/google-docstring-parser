@@ -138,5 +138,6 @@ disallow_untyped_defs = true
 [tool.docstring_checker]
 paths = [ "google_docstring_parser", "tests" ]
 require_param_types = true
+check_type_consistency = true
 exclude_files = [ "test_malformed_docstrings.py" ]
 verbose = false
