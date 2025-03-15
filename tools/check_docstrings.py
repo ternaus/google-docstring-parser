@@ -11,7 +11,7 @@ import os
 import re
 import sys
 from pathlib import Path
-from typing import List, Optional, Tuple, Dict, Any
+from typing import Any
 
 import tomli
 
@@ -26,7 +26,7 @@ DEFAULT_CONFIG = {
 }
 
 
-def load_pyproject_config() -> Dict[str, Any]:
+def load_pyproject_config() -> dict[str, Any]:
     """Load configuration from pyproject.toml if it exists.
 
     Returns:
@@ -36,11 +36,11 @@ def load_pyproject_config() -> Dict[str, Any]:
 
     # Look for pyproject.toml in the current directory
     pyproject_path = Path("pyproject.toml")
-    if not pyproject_path.exists():
+    if not pyproject_path.is_file():
         return config
 
     try:
-        with open(pyproject_path, "rb") as f:
+        with pyproject_path.open("rb") as f:
             pyproject_data = tomli.load(f)
 
         # Check if our tool is configured
@@ -64,7 +64,7 @@ def load_pyproject_config() -> Dict[str, Any]:
     return config
 
 
-def get_docstrings(file_path: str) -> List[Tuple[str, int, Optional[str]]]:
+def get_docstrings(file_path: Path) -> list[tuple[str, int, str | None]]:
     """Extract docstrings from a Python file.
 
     Args:
@@ -73,7 +73,7 @@ def get_docstrings(file_path: str) -> List[Tuple[str, int, Optional[str]]]:
     Returns:
         List of tuples containing (function/class name, line number, docstring)
     """
-    with open(file_path, "r", encoding="utf-8") as f:
+    with file_path.open(encoding="utf-8") as f:
         content = f.read()
 
     try:
@@ -85,11 +85,7 @@ def get_docstrings(file_path: str) -> List[Tuple[str, int, Optional[str]]]:
     docstrings = []
 
     # Get module docstring
-    if (
-        len(tree.body) > 0
-        and isinstance(tree.body[0], ast.Expr)
-        and isinstance(tree.body[0].value, ast.Str)
-    ):
+    if len(tree.body) > 0 and isinstance(tree.body[0], ast.Expr) and isinstance(tree.body[0].value, ast.Str):
         docstrings.append(("module", 1, tree.body[0].value.s))
 
     # Get function and class docstrings
@@ -102,7 +98,7 @@ def get_docstrings(file_path: str) -> List[Tuple[str, int, Optional[str]]]:
     return docstrings
 
 
-def check_param_types(docstring_dict: dict, require_types: bool) -> List[str]:
+def check_param_types(docstring_dict: dict, require_types: bool) -> list[str]:
     """Check if all parameters have types if required.
 
     Args:
@@ -123,7 +119,7 @@ def check_param_types(docstring_dict: dict, require_types: bool) -> List[str]:
     return errors
 
 
-def validate_docstring(docstring: str) -> List[str]:
+def validate_docstring(docstring: str) -> list[str]:
     """Perform additional validation on a docstring.
 
     Args:
@@ -149,16 +145,26 @@ def validate_docstring(docstring: str) -> List[str]:
         # Check for malformed section headers
         section_match = re.match(r"^([A-Z][a-zA-Z0-9]+):\s*$", line)
         if section_match and section_match.group(1) not in [
-            "Args", "Returns", "Raises", "Yields", "Example", "Examples",
-            "Note", "Notes", "Warning", "Warnings", "See", "References",
-            "Attributes"
+            "Args",
+            "Returns",
+            "Raises",
+            "Yields",
+            "Example",
+            "Examples",
+            "Note",
+            "Notes",
+            "Warning",
+            "Warnings",
+            "See",
+            "References",
+            "Attributes",
         ]:
             errors.append(f"Unknown section header: '{section_match.group(1)}'")
 
     return errors
 
 
-def check_file(file_path: str, require_param_types: bool = False, verbose: bool = False) -> List[str]:
+def check_file(file_path: Path, require_param_types: bool = False, verbose: bool = False) -> list[str]:
     """Check docstrings in a file.
 
     Args:
@@ -199,7 +205,7 @@ def check_file(file_path: str, require_param_types: bool = False, verbose: bool 
                     print(error_msg)
 
         except Exception as e:
-            error_msg = f"{file_path}:{line_no}: Error parsing docstring for '{name}': {str(e)}"
+            error_msg = f"{file_path}:{line_no}: Error parsing docstring for '{name}': {e!s}"
             errors.append(error_msg)
             if verbose:
                 print(error_msg)
@@ -207,7 +213,12 @@ def check_file(file_path: str, require_param_types: bool = False, verbose: bool 
     return errors
 
 
-def scan_directory(directory: str, exclude_files: List[str] = None, require_param_types: bool = False, verbose: bool = False) -> List[str]:
+def scan_directory(
+    directory: Path,
+    exclude_files: list[str] = None,
+    require_param_types: bool = False,
+    verbose: bool = False,
+) -> list[str]:
     """Scan a directory for Python files and check their docstrings.
 
     Args:
@@ -223,25 +234,21 @@ def scan_directory(directory: str, exclude_files: List[str] = None, require_para
         exclude_files = []
 
     errors = []
-    for root, _, files in os.walk(directory):
-        for file in files:
-            if file.endswith(".py"):
-                file_path = os.path.join(root, file)
+    for py_file in directory.glob("**/*.py"):
+        # Check if the file should be excluded
+        should_exclude = False
+        for exclude_pattern in exclude_files:
+            # Check if the filename matches exactly
+            if py_file.name == exclude_pattern:
+                should_exclude = True
+                break
+            # Check if the path ends with the pattern (for subdirectories)
+            if str(py_file).endswith(f"/{exclude_pattern}"):
+                should_exclude = True
+                break
 
-                # Check if the file should be excluded
-                should_exclude = False
-                for exclude_pattern in exclude_files:
-                    # Check if the filename matches exactly
-                    if file == exclude_pattern:
-                        should_exclude = True
-                        break
-                    # Check if the path ends with the pattern (for subdirectories)
-                    if file_path.endswith(os.path.sep + exclude_pattern):
-                        should_exclude = True
-                        break
-
-                if not should_exclude:
-                    errors.extend(check_file(file_path, require_param_types, verbose))
+        if not should_exclude:
+            errors.extend(check_file(py_file, require_param_types, verbose))
     return errors
 
 
@@ -261,7 +268,7 @@ def get_env_var_as_bool(var_name: str, default: bool = False) -> bool:
     return value.lower() in ("yes", "true", "t", "1")
 
 
-def get_env_var_as_list(var_name: str, default: List[str] = None, separator: str = ",") -> List[str]:
+def get_env_var_as_list(var_name: str, default: list[str] = None, separator: str = ",") -> list[str]:
     """Get an environment variable as a list.
 
     Args:
@@ -286,20 +293,22 @@ def main():
     config = load_pyproject_config()
 
     parser = argparse.ArgumentParser(
-        description="Check that docstrings in specified folders can be parsed."
+        description="Check that docstrings in specified folders can be parsed.",
     )
     parser.add_argument(
-        "paths", nargs="*", help="Directories or files to scan for Python docstrings"
+        "paths",
+        nargs="*",
+        help="Directories or files to scan for Python docstrings",
     )
     parser.add_argument(
         "--require-param-types",
         action="store_true",
-        help="Require parameter types in docstrings"
+        help="Require parameter types in docstrings",
     )
     parser.add_argument(
         "--exclude-files",
         help="Comma-separated list of filenames to exclude",
-        default=""
+        default="",
     )
     parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
     args = parser.parse_args()
@@ -346,11 +355,12 @@ def main():
         exclude_files = config["exclude_files"]
 
     all_errors = []
-    for path in paths:
-        if os.path.isdir(path):
+    for path_str in paths:
+        path = Path(path_str)
+        if path.is_dir():
             errors = scan_directory(path, exclude_files, require_param_types, verbose)
             all_errors.extend(errors)
-        elif os.path.isfile(path) and path.endswith(".py"):
+        elif path.is_file() and path.suffix == ".py":
             errors = check_file(path, require_param_types, verbose)
             all_errors.extend(errors)
         else:

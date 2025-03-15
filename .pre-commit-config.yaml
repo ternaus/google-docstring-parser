@@ -57,10 +57,11 @@ repos:
     # Ruff version.
     rev: v0.9.10
     hooks:
-      # Run the linter.
+      # Run the linter with configuration from pyproject.toml
       - id: ruff
         exclude: '__pycache__/'
         args: [ --fix ]
+
       # Run the formatter.
       - id: ruff-format
   - repo: https://github.com/pre-commit/mirrors-mypy

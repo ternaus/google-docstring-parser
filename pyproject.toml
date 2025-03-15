@@ -47,7 +47,7 @@ packages = [ "google_docstring_parser", "tools" ]
 google_docstring_parser = [ "*.md" ]
 
 [tool.setuptools.exclude-package-data]
-"*" = [ "tests*", "benchmark*", "conda.recipe*" ]
+"*" = [ "tests*" ]
 
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.
@@ -106,6 +106,15 @@ lint.ignore = [
 # Allow fix for all enabled rules (when `--fix`) is provided.
 
 lint.explicit-preview-rules = true
+lint.per-file-ignores = { "__init__.py" = [
+  "F401",
+], "tools/*.py" = [
+  "T201",
+  "BLE001",
+  "FBT001",
+  "FBT002",
+] }
+
 lint.fixable = [ "ALL" ]
 lint.unfixable = [  ]
 # Allow unused variables when underscore-prefixed.
