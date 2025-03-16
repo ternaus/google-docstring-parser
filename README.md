@@ -89,7 +89,7 @@ This package includes a pre-commit hook that checks if Google-style docstrings i
 To use this hook in another project, add the following to your `.pre-commit-config.yaml`:
 
 ```yaml
-- repo: https://github.com/albumentations-team/google-docstring-parser
+- repo: https://github.com/ternaus/google-docstring-parser
   rev: v0.0.1  # Use the latest version
   hooks:
     - id: check-google-docstrings
