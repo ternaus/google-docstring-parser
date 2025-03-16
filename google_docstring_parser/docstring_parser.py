@@ -16,6 +16,8 @@ This module provides functions to parse Google-style docstrings into structured 
 # See the LICENSE file for complete details.
 """
 
+from __future__ import annotations
+
 import re
 from typing import Any
 

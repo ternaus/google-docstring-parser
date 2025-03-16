@@ -1,4 +1,5 @@
 """Tests for checking docstrings in the example files."""
+from __future__ import annotations
 
 from pathlib import Path
 

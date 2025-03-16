@@ -1,8 +1,8 @@
 """Tests for the docstring validation functions."""
+from __future__ import annotations
 
-import ast
 from pathlib import Path
-from typing import List, Tuple, Any, Dict
+from typing import List, Any, Dict
 
 import pytest
 
