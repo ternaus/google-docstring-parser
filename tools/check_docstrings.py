@@ -351,7 +351,7 @@ def _get_config_values(args: argparse.Namespace, config: dict[str, Any]) -> tupl
         Tuple of (paths, require_param_types, verbose, exclude_files)
     """
     # Get paths
-    paths = args.paths if args.paths else config["paths"]
+    paths = args.paths or config["paths"]
 
     # Get require_param_types
     require_param_types = args.require_param_types or config["require_param_types"]
