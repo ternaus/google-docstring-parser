@@ -11,7 +11,7 @@ from tools.check_docstrings import (
     check_param_types,
     get_docstrings,
 )
-from google_docstring_parser import parse_google_docstring
+from google_docstring_parser.google_docstring_parser import parse_google_docstring
 
 
 @pytest.mark.parametrize(
@@ -39,19 +39,19 @@ from google_docstring_parser import parse_google_docstring
             """,
             ["Unclosed parenthesis in parameter type: 'param1 (list[str): Parameter with unclosed bracket in type'"],
         ),
-        # Unknown section header
+        # Docstring with custom section (should not trigger errors now)
         (
-            """A docstring with unknown section.
+            """A docstring with custom section.
 
             Args:
                 param1 (str): A string parameter
 
             BadSection:
-                This section has an invalid name
+                This section has a custom name
             """,
-            ["Unknown section header: 'BadSection'"],
+            [],
         ),
-        # Multiple issues
+        # Multiple issues (only parenthesis issues should be detected now)
         (
             """A docstring with multiple issues.
 
@@ -63,7 +63,6 @@ from google_docstring_parser import parse_google_docstring
             """,
             [
                 "Unclosed parenthesis in parameter type: 'param1 (dict[str, list[int): Unclosed bracket'",
-                "Unknown section header: 'InvalidSection'",
             ],
         ),
     ],
@@ -83,7 +82,7 @@ def test_validate_docstring(docstring: str, expected_errors: list[str]) -> None:
         (
             {
                 "description": "A docstring with args that have types",
-                "args": [
+                "Args": [
                     {"name": "param1", "type": "int", "description": "An integer parameter"},
                     {"name": "param2", "type": "str", "description": "A string parameter"},
                 ],
@@ -95,7 +94,7 @@ def test_validate_docstring(docstring: str, expected_errors: list[str]) -> None:
         (
             {
                 "description": "A docstring with args missing types",
-                "args": [
+                "Args": [
                     {"name": "param1", "type": None, "description": "Missing type"},
                     {"name": "param2", "type": "str", "description": "Has type"},
                 ],
@@ -107,7 +106,7 @@ def test_validate_docstring(docstring: str, expected_errors: list[str]) -> None:
         (
             {
                 "description": "A docstring with multiple args missing types",
-                "args": [
+                "Args": [
                     {"name": "param1", "type": None, "description": "Missing type"},
                     {"name": "param2", "type": None, "description": "Also missing type"},
                     {"name": "param3", "type": "str", "description": "Has type"},
@@ -120,7 +119,7 @@ def test_validate_docstring(docstring: str, expected_errors: list[str]) -> None:
         (
             {
                 "description": "A docstring with args missing types",
-                "args": [
+                "Args": [
                     {"name": "param1", "type": None, "description": "Missing type"},
                     {"name": "param2", "type": "str", "description": "Has type"},
                 ],
@@ -224,9 +223,9 @@ def test_parse_google_docstring(docstring: str, expected_args_count: int, expect
     parsed = parse_google_docstring(docstring)
 
     # Check args count
-    args = parsed.get("args", [])
-    assert len(args) == expected_args_count
+    args = parsed.get("Args", [])
+    assert len(args) == expected_args_count, f"Expected {expected_args_count} args, got {args}"
 
     # Check returns count
-    returns = parsed.get("returns", [])
+    returns = parsed.get("Returns", [])
     assert len(returns) == expected_returns_count

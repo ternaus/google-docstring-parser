@@ -37,6 +37,7 @@ classifiers = [
 ]
 
 dependencies = [
+  "docstring-parser>=0.16",
   "typing-extensions>=4.9; python_version<'3.10'",
 ]
 
@@ -84,16 +85,13 @@ exclude = [
   ".vscode",
   "__pypackages__",
   "_build",
-  "benchmark",
   "buck-out",
   "build",
   "dist",
   "node_modules",
-  "setup.py",
   "site",
   "site-packages",
   "tests",
-  "tools",
   "venv",
 ]
 
@@ -118,6 +116,7 @@ lint.per-file-ignores = { "__init__.py" = [
   "BLE001",
   "FBT001",
   "FBT002",
+  "ANN201",
 ] }
 
 lint.fixable = [ "ALL" ]
@@ -141,7 +140,7 @@ no_implicit_reexport = true
 disallow_untyped_defs = true
 
 [tool.docstring_checker]
-paths = [ "google_docstring_parser", "tests" ]
+paths = [ "google_docstring_parser", "tools" ]
 require_param_types = true
 check_type_consistency = true
 exclude_files = [ "test_malformed_docstrings.py" ]

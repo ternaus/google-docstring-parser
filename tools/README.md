@@ -11,7 +11,7 @@ A pre-commit hook that checks if Google-style docstrings in your codebase can be
 To use this hook in another project, add the following to your `.pre-commit-config.yaml`:
 
 ```yaml
-- repo: https://github.com/albumentations-team/google-docstring-parser
+- repo: https://github.com/ternaus/google-docstring-parser
   rev: v0.0.1  # Use the latest version
   hooks:
     - id: check-google-docstrings
@@ -67,7 +67,7 @@ verbose = false
 
 ```yaml
 # .pre-commit-config.yaml
-- repo: https://github.com/albumentations-team/google-docstring-parser
+- repo: https://github.com/ternaus/google-docstring-parser
   rev: v0.0.1
   hooks:
     - id: check-google-docstrings

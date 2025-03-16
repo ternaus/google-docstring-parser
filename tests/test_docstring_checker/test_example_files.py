@@ -25,7 +25,6 @@ def test_malformed_docstrings_file() -> None:
 
     # Check for specific error types
     error_text = "\n".join(errors)
-    assert "Unknown section header" in error_text
     assert "Unclosed parenthesis" in error_text
 
 
@@ -76,7 +75,7 @@ def test_scan_directory() -> None:
     [
         ("test_valid_docstrings.py", False, 0),
         ("test_valid_docstrings.py", True, 0),  # Valid file should pass even with strict checking
-        ("test_malformed_docstrings.py", False, 3),  # At least 3 errors without type checking
+        ("test_malformed_docstrings.py", False, 3),  # At least 3 errors from unclosed parentheses
         ("test_malformed_docstrings.py", True, 5),   # More errors with type checking
     ],
 )

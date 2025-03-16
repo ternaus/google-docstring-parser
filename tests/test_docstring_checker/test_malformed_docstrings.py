@@ -2,7 +2,7 @@
 
 This file contains intentionally malformed docstrings to test the docstring checker.
 """
-from typing import Dict, List, Any, Optional, Union
+from typing import Dict, Any
 
 
 def missing_arg_type() -> bool:
