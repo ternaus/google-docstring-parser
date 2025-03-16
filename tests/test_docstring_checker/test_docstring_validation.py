@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Any, Dict
+from typing import Any
 
 import pytest
 
@@ -68,7 +68,7 @@ from google_docstring_parser import parse_google_docstring
         ),
     ],
 )
-def test_validate_docstring(docstring: str, expected_errors: List[str]) -> None:
+def test_validate_docstring(docstring: str, expected_errors: list[str]) -> None:
     """Test the validate_docstring function with various docstrings."""
     errors = validate_docstring(docstring)
     assert errors == expected_errors
@@ -130,7 +130,7 @@ def test_validate_docstring(docstring: str, expected_errors: List[str]) -> None:
         ),
     ],
 )
-def test_check_param_types(docstring_dict: Dict[str, Any], require_types: bool, expected_errors: List[str]) -> None:
+def test_check_param_types(docstring_dict: dict[str, Any], require_types: bool, expected_errors: list[str]) -> None:
     """Test the check_param_types function with various docstring dictionaries."""
     errors = check_param_types(docstring_dict, require_types)
     assert errors == expected_errors
