@@ -205,13 +205,13 @@ def _handle_validation_errors(
 
 def _handle_param_type_errors(
     context: DocstringContext,
-    parsed: dict,
+    parsed: dict[str, Any],
 ) -> list[str]:
     """Handle parameter type errors for a docstring.
 
     Args:
         context (DocstringContext): Docstring context
-        parsed (dict): Parsed docstring
+        parsed (dict[str, Any]): Parsed docstring
 
     Returns:
         List of error messages

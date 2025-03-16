@@ -52,8 +52,8 @@ print(parsed)
 Output:
 ```python
 {
-    'description': 'Apply elastic deformation to images, masks, bounding boxes, and keypoints.\n\nThis transformation introduces random elastic distortions to the input data. It\'s particularly\nuseful for data augmentation in training deep learning models, especially for tasks like\nimage segmentation or object detection where you want to maintain the relative positions of\nfeatures while introducing realistic deformations.',
-    'args': [
+    'Description': 'Apply elastic deformation to images, masks, bounding boxes, and keypoints.\n\nThis transformation introduces random elastic distortions to the input data. It\'s particularly\nuseful for data augmentation in training deep learning models, especially for tasks like\nimage segmentation or object detection where you want to maintain the relative positions of\nfeatures while introducing realistic deformations.',
+    'Args': [
         {
             'name': 'alpha',
             'type': 'float',
@@ -65,7 +65,7 @@ Output:
             'description': 'Standard deviation of the Gaussian filter used to smooth the displacement\nfields. Higher values result in smoother, more global distortions. Default: 50.0'
         }
     ],
-    'example': '>>> import albumentations as A\n>>> transform = A.ElasticTransform(alpha=1, sigma=50, p=0.5)'
+    'Example': '>>> import albumentations as A\n>>> transform = A.ElasticTransform(alpha=1, sigma=50, p=0.5)'
 }
 ```
 
