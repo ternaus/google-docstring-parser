@@ -4,15 +4,15 @@
 This script scans Python files in specified directories and checks if their
 docstrings can be parsed with the google_docstring_parser.
 """
+
 from __future__ import annotations
 
 import argparse
 import ast
-import os
 import re
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 import tomli
 
@@ -25,6 +25,25 @@ DEFAULT_CONFIG = {
     "exclude_files": [],
     "verbose": False,
 }
+
+
+class DocstringContext(NamedTuple):
+    """Context for docstring processing.
+
+    Args:
+        file_path: Path to the file
+        line_no: Line number
+        name: Name of the function or class
+        verbose: Whether to print verbose output
+        require_param_types: Whether parameter types are required
+    """
+
+    file_path: Path
+    line_no: int
+    name: str
+    verbose: bool
+    require_param_types: bool = False
+
 
 def load_pyproject_config() -> dict[str, Any]:
     """Load configuration from pyproject.toml if it exists.
@@ -111,12 +130,7 @@ def check_param_types(docstring_dict: dict, require_types: bool) -> list[str]:
     if not require_types or "Args" not in docstring_dict:
         return []
 
-    errors = []
-    for arg in docstring_dict["Args"]:
-        if arg["type"] is None:
-            errors.append(f"Parameter '{arg['name']}' is missing a type")
-
-    return errors
+    return [f"Parameter '{arg['name']}' is missing a type" for arg in docstring_dict["Args"] if arg["type"] is None]
 
 
 def validate_docstring(docstring: str) -> list[str]:
@@ -133,34 +147,128 @@ def validate_docstring(docstring: str) -> list[str]:
     # Check for unclosed parentheses in parameter types
     lines = docstring.split("\n")
     for line in lines:
-        line = line.strip()
-        if not line:
+        stripped_line = line.strip()
+        if not stripped_line:
             continue
 
         # Check for parameter definitions with unclosed parentheses
         # Improved regex to better detect unclosed parentheses and brackets
-        param_match = re.match(r"^\s*(\w+)\s+\(([^)]*$|.*\[[^\]]*$)", line)
+        param_match = re.match(r"^\s*(\w+)\s+\(([^)]*$|.*\[[^\]]*$)", stripped_line)
         if param_match:
-            errors.append(f"Unclosed parenthesis in parameter type: '{line}'")
+            errors.append(f"Unclosed parenthesis in parameter type: '{stripped_line}'")
 
-        # Check for malformed section headers
-        section_match = re.match(r"^([A-Z][a-zA-Z0-9]+):\s*$", line)
-        if section_match and section_match.group(1) not in [
-            "Args",
-            "Returns",
-            "Raises",
-            "Yields",
-            "Example",
-            "Examples",
-            "Note",
-            "Notes",
-            "Warning",
-            "Warnings",
-            "See",
-            "References",
-            "Attributes",
-        ]:
-            errors.append(f"Unknown section header: '{section_match.group(1)}'")
+    return errors
+
+
+def _format_error(context: DocstringContext, error: str) -> str:
+    """Format an error message.
+
+    Args:
+        context: Docstring context
+        error: Error message
+
+    Returns:
+        Formatted error message
+    """
+    return f"{context.file_path}:{context.line_no}: {error} in '{context.name}'"
+
+
+def _handle_validation_errors(
+    context: DocstringContext,
+    docstring: str,
+) -> list[str]:
+    """Handle validation errors for a docstring.
+
+    Args:
+        context: Docstring context
+        docstring: The docstring to validate
+
+    Returns:
+        List of error messages
+    """
+    errors = []
+    try:
+        validation_errors = validate_docstring(docstring)
+        for error in validation_errors:
+            error_msg = _format_error(context, error)
+            errors.append(error_msg)
+            if context.verbose:
+                print(error_msg)
+    except Exception as e:
+        error_msg = f"{context.file_path}:{context.line_no}: Error validating docstring for '{context.name}': {e!s}"
+        errors.append(error_msg)
+        if context.verbose:
+            print(error_msg)
+
+    return errors
+
+
+def _handle_param_type_errors(
+    context: DocstringContext,
+    parsed: dict,
+) -> list[str]:
+    """Handle parameter type errors for a docstring.
+
+    Args:
+        context: Docstring context
+        parsed: Parsed docstring
+
+    Returns:
+        List of error messages
+    """
+    errors = []
+    if not context.require_param_types:
+        return errors
+
+    try:
+        type_errors = check_param_types(parsed, context.require_param_types)
+        for error in type_errors:
+            error_msg = _format_error(context, error)
+            errors.append(error_msg)
+            if context.verbose:
+                print(error_msg)
+    except Exception as e:
+        error_msg = f"{context.file_path}:{context.line_no}: Error checking parameter types for '{context.name}': {e!s}"
+        errors.append(error_msg)
+        if context.verbose:
+            print(error_msg)
+
+    return errors
+
+
+def _process_docstring(
+    context: DocstringContext,
+    docstring: str,
+) -> list[str]:
+    """Process a single docstring.
+
+    Args:
+        context: Docstring context
+        docstring: The docstring to process
+
+    Returns:
+        List of error messages
+    """
+    errors = []
+
+    if not docstring:
+        return errors
+
+    # Perform additional validation
+    errors.extend(_handle_validation_errors(context, docstring))
+
+    # If validation failed with an exception, we'll have errors and should stop processing this docstring
+    if errors and errors[-1].endswith(f"Error validating docstring for '{context.name}'"):
+        return errors
+
+    try:
+        parsed = parse_google_docstring(docstring)
+        errors.extend(_handle_param_type_errors(context, parsed))
+    except Exception as e:
+        error_msg = f"{context.file_path}:{context.line_no}: Error parsing docstring for '{context.name}': {e!s}"
+        errors.append(error_msg)
+        if context.verbose:
+            print(error_msg)
 
     return errors
 
@@ -168,7 +276,7 @@ def validate_docstring(docstring: str) -> list[str]:
 def check_file(
     file_path: Path,
     require_param_types: bool = False,
-    verbose: bool = False
+    verbose: bool = False,
 ) -> list[str]:
     """Check docstrings in a file.
 
@@ -188,61 +296,28 @@ def check_file(
     try:
         docstrings = get_docstrings(file_path)
     except Exception as e:
-        error_msg = f"{file_path}: Error getting docstrings: {str(e)}"
+        error_msg = f"{file_path}: Error getting docstrings: {e!s}"
         errors.append(error_msg)
         if verbose:
             print(error_msg)
         return errors
 
-    for name, line_no, docstring, node in docstrings:
-        if not docstring:
-            continue
-
-        # Perform additional validation
-        try:
-            validation_errors = validate_docstring(docstring)
-            for error in validation_errors:
-                error_msg = f"{file_path}:{line_no}: {error} in '{name}'"
-                errors.append(error_msg)
-                if verbose:
-                    print(error_msg)
-        except Exception as e:
-            error_msg = f"{file_path}:{line_no}: Error validating docstring for '{name}': {str(e)}"
-            errors.append(error_msg)
-            if verbose:
-                print(error_msg)
-            continue
-
-        try:
-            parsed = parse_google_docstring(docstring)
-
-            # Check for missing parameter types if required
-            if require_param_types:
-                try:
-                    type_errors = check_param_types(parsed, require_param_types)
-                    for error in type_errors:
-                        error_msg = f"{file_path}:{line_no}: {error} in '{name}'"
-                        errors.append(error_msg)
-                        if verbose:
-                            print(error_msg)
-                except Exception as e:
-                    error_msg = f"{file_path}:{line_no}: Error checking parameter types for '{name}': {str(e)}"
-                    errors.append(error_msg)
-                    if verbose:
-                        print(error_msg)
-
-        except Exception as e:
-            error_msg = f"{file_path}:{line_no}: Error parsing docstring for '{name}': {e!s}"
-            errors.append(error_msg)
-            if verbose:
-                print(error_msg)
+    for name, line_no, docstring, _ in docstrings:
+        context = DocstringContext(
+            file_path=file_path,
+            line_no=line_no,
+            name=name,
+            verbose=verbose,
+            require_param_types=require_param_types,
+        )
+        errors.extend(_process_docstring(context, docstring))
 
     return errors
 
 
 def scan_directory(
     directory: Path,
-    exclude_files: list[str] = None,
+    exclude_files: list[str] | None = None,
     require_param_types: bool = False,
     verbose: bool = False,
 ) -> list[str]:
@@ -279,46 +354,12 @@ def scan_directory(
     return errors
 
 
-def get_env_var_as_bool(var_name: str, default: bool = False) -> bool:
-    """Get an environment variable as a boolean.
-
-    Args:
-        var_name: Name of the environment variable
-        default: Default value if the environment variable is not set
+def _parse_args() -> argparse.Namespace:
+    """Parse command line arguments.
 
     Returns:
-        Boolean value of the environment variable
+        Parsed arguments
     """
-    value = os.environ.get(var_name)
-    if value is None:
-        return default
-    return value.lower() in ("yes", "true", "t", "1")
-
-
-def get_env_var_as_list(var_name: str, default: list[str] = None, separator: str = ",") -> list[str]:
-    """Get an environment variable as a list.
-
-    Args:
-        var_name: Name of the environment variable
-        default: Default value if the environment variable is not set
-        separator: Separator to split the environment variable value
-
-    Returns:
-        List of values from the environment variable
-    """
-    if default is None:
-        default = []
-    value = os.environ.get(var_name)
-    if not value:
-        return default
-    return [item.strip() for item in value.split(separator) if item.strip()]
-
-
-def main():
-    """Run the docstring checker."""
-    # Load configuration from pyproject.toml
-    config = load_pyproject_config()
-
     parser = argparse.ArgumentParser(
         description="Check that docstrings in specified folders can be parsed.",
     )
@@ -338,49 +379,55 @@ def main():
         default="",
     )
     parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
-    args = parser.parse_args()
+    return parser.parse_args()
 
-    # Priority: Command line > Environment variables > pyproject.toml > Defaults
 
+def _get_config_values(args: argparse.Namespace, config: dict[str, Any]) -> tuple[list[str], bool, bool, list[str]]:
+    """Get configuration values from command line args and config.
+
+    Args:
+        args: Command line arguments
+        config: Configuration from pyproject.toml
+
+    Returns:
+        Tuple of (paths, require_param_types, verbose, exclude_files)
+    """
     # Get paths
-    paths = args.paths
-    if not paths:
-        # Get paths from environment variable
-        env_paths = get_env_var_as_list("DOCSTRING_CHECK_PATHS")
-        if env_paths:
-            paths = env_paths
-        else:
-            # Use paths from pyproject.toml
-            paths = config["paths"]
+    paths = args.paths if args.paths else config["paths"]
 
     # Get require_param_types
-    require_param_types = args.require_param_types
-    if not require_param_types:
-        require_param_types = get_env_var_as_bool("DOCSTRING_CHECK_REQUIRE_PARAM_TYPES")
-        if not require_param_types:
-            require_param_types = config["require_param_types"]
+    require_param_types = args.require_param_types if args.require_param_types else config["require_param_types"]
 
     # Get verbose
-    verbose = args.verbose
-    if not verbose:
-        verbose = get_env_var_as_bool("DOCSTRING_CHECK_VERBOSE")
-        if not verbose:
-            verbose = config["verbose"]
+    verbose = args.verbose if args.verbose else config["verbose"]
 
     # Get exclude_files
     exclude_files = []
     if args.exclude_files:
         exclude_files = [f.strip() for f in args.exclude_files.split(",") if f.strip()]
-
-    # Add files from environment variable
-    env_exclude_files = get_env_var_as_list("DOCSTRING_CHECK_EXCLUDE_FILES")
-    if env_exclude_files:
-        exclude_files.extend(env_exclude_files)
-
-    # Add files from pyproject.toml if no files specified yet
-    if not exclude_files:
+    elif not exclude_files:
         exclude_files = config["exclude_files"]
 
+    return paths, require_param_types, verbose, exclude_files
+
+
+def _process_paths(
+    paths: list[str],
+    exclude_files: list[str],
+    require_param_types: bool,
+    verbose: bool,
+) -> list[str]:
+    """Process paths and collect errors.
+
+    Args:
+        paths: List of paths to process
+        exclude_files: List of files to exclude
+        require_param_types: Whether to require parameter types
+        verbose: Whether to print verbose output
+
+    Returns:
+        List of error messages
+    """
     all_errors = []
     for path_str in paths:
         path = Path(path_str)
@@ -392,15 +439,32 @@ def main():
             all_errors.extend(errors)
         else:
             print(f"Error: {path} is not a directory or Python file")
+    return all_errors
 
+
+def main():
+    """Run the docstring checker."""
+    # Load configuration from pyproject.toml
+    config = load_pyproject_config()
+
+    # Parse command line arguments
+    args = _parse_args()
+
+    # Get configuration values
+    paths, require_param_types, verbose, exclude_files = _get_config_values(args, config)
+
+    # Process paths and collect errors
+    all_errors = _process_paths(paths, exclude_files, require_param_types, verbose)
+
+    # Report results
     if all_errors:
         for error in all_errors:
             print(error)
         sys.exit(1)
-    else:
-        if verbose:
-            print("All docstrings parsed successfully!")
-        sys.exit(0)
+    elif verbose:
+        print("All docstrings parsed successfully!")
+
+    sys.exit(0)
 
 
 if __name__ == "__main__":

@@ -47,7 +47,6 @@ def test_malformed_docstrings() -> None:
     assert result.returncode == 1, "Checker should fail on malformed docstrings"
 
     # Check that the output contains error messages
-    assert "BadSection" in result.stdout, "Should detect unknown section headers"
     assert "Unclosed parenthesis" in result.stdout, "Should detect unclosed parenthesis"
     assert "__init__" in result.stdout, "Should detect issues in class methods"
 

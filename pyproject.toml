@@ -116,6 +116,7 @@ lint.per-file-ignores = { "__init__.py" = [
   "BLE001",
   "FBT001",
   "FBT002",
+  "ANN201",
 ] }
 
 lint.fixable = [ "ALL" ]

@@ -39,19 +39,19 @@ from google_docstring_parser.google_docstring_parser import parse_google_docstri
             """,
             ["Unclosed parenthesis in parameter type: 'param1 (list[str): Parameter with unclosed bracket in type'"],
         ),
-        # Unknown section header
+        # Docstring with custom section (should not trigger errors now)
         (
-            """A docstring with unknown section.
+            """A docstring with custom section.
 
             Args:
                 param1 (str): A string parameter
 
             BadSection:
-                This section has an invalid name
+                This section has a custom name
             """,
-            ["Unknown section header: 'BadSection'"],
+            [],
         ),
-        # Multiple issues
+        # Multiple issues (only parenthesis issues should be detected now)
         (
             """A docstring with multiple issues.
 
@@ -63,7 +63,6 @@ from google_docstring_parser.google_docstring_parser import parse_google_docstri
             """,
             [
                 "Unclosed parenthesis in parameter type: 'param1 (dict[str, list[int): Unclosed bracket'",
-                "Unknown section header: 'InvalidSection'",
             ],
         ),
     ],
