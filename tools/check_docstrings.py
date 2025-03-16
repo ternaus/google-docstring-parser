@@ -125,12 +125,19 @@ def check_param_types(docstring_dict: dict[str, Any], require_types: bool) -> li
         require_types (bool): Whether parameter types are required
 
     Returns:
-        List of error messages for parameters missing types
+        List of error messages for parameters missing types or having invalid types
     """
     if not require_types or "Args" not in docstring_dict:
         return []
 
-    return [f"Parameter '{arg['name']}' is missing a type" for arg in docstring_dict["Args"] if arg["type"] is None]
+    errors = []
+    for arg in docstring_dict["Args"]:
+        if arg["type"] is None:
+            errors.append(f"Parameter '{arg['name']}' is missing a type")
+        elif "invalid type" in arg["type"].lower():
+            errors.append(f"Parameter '{arg['name']}' has an invalid type: '{arg['type']}'")
+
+    return errors
 
 
 def validate_docstring(docstring: str) -> list[str]:
@@ -157,89 +164,31 @@ def validate_docstring(docstring: str) -> list[str]:
         if param_match:
             errors.append(f"Unclosed parenthesis in parameter type: '{stripped_line}'")
 
+        # Check for invalid type declarations
+        param_match = re.match(r"^\s*(\w+)\s+\((invalid type)\)", stripped_line)
+        if param_match:
+            errors.append(f"Invalid type declaration: '{stripped_line}'")
+
     return errors
 
 
 def _format_error(context: DocstringContext, error: str) -> str:
-    """Format an error message.
+    """Format an error message consistently.
 
     Args:
         context (DocstringContext): Docstring context
         error (str): Error message
 
     Returns:
-        Formatted error message
+        str: Formatted error message
     """
-    return f"{context.file_path}:{context.line_no}: {error} in '{context.name}'"
+    msg = f"{context.file_path}:{context.line_no}: {error} in '{context.name}'"
+    if context.verbose:
+        print(msg)
+    return msg
 
 
-def _handle_validation_errors(
-    context: DocstringContext,
-    docstring: str,
-) -> list[str]:
-    """Handle validation errors for a docstring.
-
-    Args:
-        context (DocstringContext): Docstring context
-        docstring (str): The docstring to validate
-
-    Returns:
-        List of error messages
-    """
-    errors = []
-    try:
-        validation_errors = validate_docstring(docstring)
-        for error in validation_errors:
-            error_msg = _format_error(context, error)
-            errors.append(error_msg)
-            if context.verbose:
-                print(error_msg)
-    except Exception as e:
-        error_msg = f"{context.file_path}:{context.line_no}: Error validating docstring for '{context.name}': {e!s}"
-        errors.append(error_msg)
-        if context.verbose:
-            print(error_msg)
-
-    return errors
-
-
-def _handle_param_type_errors(
-    context: DocstringContext,
-    parsed: dict[str, Any],
-) -> list[str]:
-    """Handle parameter type errors for a docstring.
-
-    Args:
-        context (DocstringContext): Docstring context
-        parsed (dict[str, Any]): Parsed docstring
-
-    Returns:
-        List of error messages
-    """
-    errors = []
-    if not context.require_param_types:
-        return errors
-
-    try:
-        type_errors = check_param_types(parsed, context.require_param_types)
-        for error in type_errors:
-            error_msg = _format_error(context, error)
-            errors.append(error_msg)
-            if context.verbose:
-                print(error_msg)
-    except Exception as e:
-        error_msg = f"{context.file_path}:{context.line_no}: Error checking parameter types for '{context.name}': {e!s}"
-        errors.append(error_msg)
-        if context.verbose:
-            print(error_msg)
-
-    return errors
-
-
-def _process_docstring(
-    context: DocstringContext,
-    docstring: str,
-) -> list[str]:
+def _process_docstring(context: DocstringContext, docstring: str) -> list[str]:
     """Process a single docstring.
 
     Args:
@@ -247,28 +196,35 @@ def _process_docstring(
         docstring (str): The docstring to process
 
     Returns:
-        List of error messages
+        list[str]: List of error messages
     """
     errors = []
-
     if not docstring:
         return errors
 
-    # Perform additional validation
-    errors.extend(_handle_validation_errors(context, docstring))
-
-    # If validation failed with an exception, we'll have errors and should stop processing this docstring
-    if errors and errors[-1].endswith(f"Error validating docstring for '{context.name}'"):
+    # Validate docstring inline
+    try:
+        val_errors = validate_docstring(docstring)
+        if val_errors:
+            errors.extend(_format_error(context, err) for err in val_errors)
+    except Exception as e:
+        errors.append(_format_error(context, f"Error validating docstring: {e}"))
         return errors
 
+    # Parse docstring inline
     try:
         parsed = parse_google_docstring(docstring)
-        errors.extend(_handle_param_type_errors(context, parsed))
     except Exception as e:
-        error_msg = f"{context.file_path}:{context.line_no}: Error parsing docstring for '{context.name}': {e!s}"
-        errors.append(error_msg)
-        if context.verbose:
-            print(error_msg)
+        errors.append(_format_error(context, f"Error parsing docstring: {e}"))
+        return errors
+
+    # Check parameter types (if required) inline
+    if context.require_param_types:
+        try:
+            type_errors = check_param_types(parsed, context.require_param_types)
+            errors.extend(_format_error(context, err) for err in type_errors)
+        except Exception as e:
+            errors.append(_format_error(context, f"Error checking parameter types: {e}"))
 
     return errors
 
