@@ -4,6 +4,7 @@
 This script scans Python files in specified directories and checks if their
 docstrings can be parsed with the google_docstring_parser.
 """
+from __future__ import annotations
 
 import argparse
 import ast

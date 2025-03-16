@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import pytest
 from typing import Any
 
-from google_docstring_parser.parser import parse_google_docstring, _parse_args_section
+from google_docstring_parser.docstring_parser import parse_google_docstring, _parse_args_section
 
 @pytest.mark.parametrize(
     "docstring,expected",
