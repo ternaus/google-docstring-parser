@@ -1,10 +1,8 @@
 # Google Docstring Parser
 
-<div style="background-color: #ff0000; color: white; padding: 15px; margin: 20px 0; font-size: 18px; font-weight: bold; text-align: center; border-radius: 5px;">
-⚠️ IMPORTANT LICENSE NOTICE ⚠️<br>
-This package requires a PAID LICENSE for all users EXCEPT the Albumentations Team.<br>
-Contact iglovikov@gmail.com to obtain a license before using this software.
-</div>
+> [!IMPORTANT]
+> This package requires a PAID LICENSE for all users EXCEPT the Albumentations Team.
+> Contact iglovikov@gmail.com to obtain a license before using this software.
 
 A Python package for parsing Google-style docstrings into structured dictionaries.
 
