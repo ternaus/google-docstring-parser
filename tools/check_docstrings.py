@@ -117,11 +117,11 @@ def get_docstrings(file_path: Path) -> list[tuple[str, int, str | None, ast.AST 
     return docstrings
 
 
-def check_param_types(docstring_dict: dict, require_types: bool) -> list[str]:
+def check_param_types(docstring_dict: dict[str, Any], require_types: bool) -> list[str]:
     """Check if all parameters have types if required.
 
     Args:
-        docstring_dict (dict): Parsed docstring dictionary
+        docstring_dict (dict[str, Any]): Parsed docstring dictionary
         require_types (bool): Whether parameter types are required
 
     Returns:
