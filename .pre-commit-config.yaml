@@ -55,7 +55,7 @@ repos:
         additional_dependencies: ["tomli"]
   - repo: https://github.com/astral-sh/ruff-pre-commit
     # Ruff version.
-    rev: v0.9.10
+    rev: v0.11.0
     hooks:
       # Run the linter with configuration from pyproject.toml
       - id: ruff
