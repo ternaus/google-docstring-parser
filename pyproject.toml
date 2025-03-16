@@ -85,16 +85,13 @@ exclude = [
   ".vscode",
   "__pypackages__",
   "_build",
-  "benchmark",
   "buck-out",
   "build",
   "dist",
   "node_modules",
-  "setup.py",
   "site",
   "site-packages",
   "tests",
-  "tools",
   "venv",
 ]
 

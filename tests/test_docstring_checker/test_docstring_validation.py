@@ -83,7 +83,7 @@ def test_validate_docstring(docstring: str, expected_errors: list[str]) -> None:
         (
             {
                 "description": "A docstring with args that have types",
-                "args": [
+                "Args": [
                     {"name": "param1", "type": "int", "description": "An integer parameter"},
                     {"name": "param2", "type": "str", "description": "A string parameter"},
                 ],
@@ -95,7 +95,7 @@ def test_validate_docstring(docstring: str, expected_errors: list[str]) -> None:
         (
             {
                 "description": "A docstring with args missing types",
-                "args": [
+                "Args": [
                     {"name": "param1", "type": None, "description": "Missing type"},
                     {"name": "param2", "type": "str", "description": "Has type"},
                 ],
@@ -107,7 +107,7 @@ def test_validate_docstring(docstring: str, expected_errors: list[str]) -> None:
         (
             {
                 "description": "A docstring with multiple args missing types",
-                "args": [
+                "Args": [
                     {"name": "param1", "type": None, "description": "Missing type"},
                     {"name": "param2", "type": None, "description": "Also missing type"},
                     {"name": "param3", "type": "str", "description": "Has type"},
@@ -120,7 +120,7 @@ def test_validate_docstring(docstring: str, expected_errors: list[str]) -> None:
         (
             {
                 "description": "A docstring with args missing types",
-                "args": [
+                "Args": [
                     {"name": "param1", "type": None, "description": "Missing type"},
                     {"name": "param2", "type": "str", "description": "Has type"},
                 ],
