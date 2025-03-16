@@ -10,7 +10,7 @@ version = "0.0.1"
 description = "A lightweight, efficient parser for Google-style Python docstrings that converts them into structured dictionaries."
 readme = "README.md"
 keywords = [ "docstring", "documentation", "google-style", "parser", "python", "static-analysis", "type-hints" ]
-license = { file = "LICENSE" }
+license = { text = "Custom License - See LICENSE file for details" }
 maintainers = [ { name = "Vladimir Iglovikov" } ]
 
 authors = [ { name = "Vladimir Iglovikov" } ]
@@ -20,7 +20,7 @@ classifiers = [
   "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Developers",
   "Intended Audience :: Science/Research",
-  "License :: OSI Approved :: MIT License",
+  "License :: Other/Proprietary License",
   "Operating System :: OS Independent",
   "Programming Language :: Python",
   "Programming Language :: Python :: 3 :: Only",
