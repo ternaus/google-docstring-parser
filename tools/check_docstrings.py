@@ -7,12 +7,11 @@ docstrings can be parsed with the google_docstring_parser.
 
 import argparse
 import ast
-import inspect
 import os
 import re
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, get_type_hints
+from typing import Any
 
 import tomli
 
@@ -22,30 +21,9 @@ from google_docstring_parser import parse_google_docstring
 DEFAULT_CONFIG = {
     "paths": ["."],
     "require_param_types": False,
-    "check_type_consistency": False,
     "exclude_files": [],
     "verbose": False,
 }
-
-# Mapping from common docstring type names to their Python type equivalents
-TYPE_MAPPING = {
-    "str": str,
-    "string": str,
-    "int": int,
-    "integer": int,
-    "float": float,
-    "bool": bool,
-    "boolean": bool,
-    "list": list,
-    "dict": dict,
-    "tuple": tuple,
-    "set": set,
-    "none": type(None),
-    "None": type(None),
-    "any": Any,
-    "Any": Any,
-}
-
 
 def load_pyproject_config() -> dict[str, Any]:
     """Load configuration from pyproject.toml if it exists.
@@ -74,8 +52,6 @@ def load_pyproject_config() -> dict[str, Any]:
             config["paths"] = tool_config["paths"]
         if "require_param_types" in tool_config:
             config["require_param_types"] = bool(tool_config["require_param_types"])
-        if "check_type_consistency" in tool_config:
-            config["check_type_consistency"] = bool(tool_config["check_type_consistency"])
         if "exclude_files" in tool_config:
             config["exclude_files"] = tool_config["exclude_files"]
         if "verbose" in tool_config:
@@ -142,212 +118,6 @@ def check_param_types(docstring_dict: dict, require_types: bool) -> list[str]:
     return errors
 
 
-def normalize_type_string(type_str: str) -> str:
-    """Normalize a type string for comparison.
-
-    Args:
-        type_str: The type string from a docstring
-
-    Returns:
-        Normalized type string
-    """
-    # Remove spaces and convert to lowercase for basic comparison
-    normalized = type_str.lower().replace(" ", "")
-
-    # Handle common aliases
-    normalized = normalized.replace("integer", "int")
-    normalized = normalized.replace("boolean", "bool")
-    normalized = normalized.replace("string", "str")
-
-    # Handle optional types
-    if normalized.startswith("optional[") and normalized.endswith("]"):
-        inner_type = normalized[9:-1]  # Extract type inside Optional[]
-        normalized = f"union[{inner_type},none]"
-
-    return normalized
-
-
-def extract_annotation_type_str(annotation) -> str:
-    """Extract a string representation from a type annotation.
-
-    Args:
-        annotation: Type annotation from function signature
-
-    Returns:
-        String representation of the type
-    """
-    if annotation is None:
-        return "None"
-
-    if hasattr(annotation, "__origin__"):
-        # Handle generic types like List[str], Dict[str, int], etc.
-        origin = annotation.__origin__
-        args = getattr(annotation, "__args__", [])
-
-        if origin is Union:
-            return f"Union[{', '.join(extract_annotation_type_str(arg) for arg in args)}]"
-
-        origin_name = origin.__name__ if hasattr(origin, "__name__") else str(origin)
-        if args:
-            args_str = ", ".join(extract_annotation_type_str(arg) for arg in args)
-            return f"{origin_name}[{args_str}]"
-        return origin_name
-
-    # Handle basic types
-    if hasattr(annotation, "__name__"):
-        return annotation.__name__
-
-    return str(annotation)
-
-
-def compare_types(docstring_type: str, annotation_type) -> bool:
-    """Compare a docstring type with a function annotation type.
-
-    Args:
-        docstring_type: Type string from docstring
-        annotation_type: Type annotation from function
-
-    Returns:
-        True if types are compatible, False otherwise
-    """
-    if docstring_type is None or annotation_type is None:
-        return False
-
-    # Normalize docstring type
-    normalized_docstring = normalize_type_string(docstring_type)
-
-    # Get string representation of annotation
-    annotation_str = normalize_type_string(extract_annotation_type_str(annotation_type))
-
-    # Direct comparison
-    if normalized_docstring == annotation_str:
-        return True
-
-    # Handle special cases
-    if normalized_docstring == "any" or annotation_str == "any":
-        return True
-
-    # Handle Union/Optional types
-    if "union" in normalized_docstring and "union" in annotation_str:
-        # This is a simplified check - a more robust implementation would parse and compare the union members
-        return True
-
-    return False
-
-
-def verify_type_consistency(node: ast.AST, docstring_dict: dict) -> list[str]:
-    """Check if types in docstring match function annotations.
-
-    Args:
-        node: AST node for the function
-        docstring_dict: Parsed docstring dictionary
-
-    Returns:
-        List of error messages for type inconsistencies
-    """
-    if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-        return []
-
-    # Ensure docstring_dict is a dictionary and has the expected structure
-    if not isinstance(docstring_dict, dict) or "args" not in docstring_dict:
-        return []
-
-    # Ensure args is a list
-    if not isinstance(docstring_dict["args"], list):
-        return []
-
-    errors = []
-
-    try:
-        # Extract parameter annotations from function definition
-        param_annotations = {}
-        for arg in node.args.args:
-            if hasattr(arg, "annotation") and arg.annotation is not None:
-                # Get a simple string representation of the annotation
-                if isinstance(arg.annotation, ast.Name):
-                    param_annotations[arg.arg] = arg.annotation.id
-                elif isinstance(arg.annotation, ast.Subscript):
-                    # For generic types like List[str], just get the base type
-                    if isinstance(arg.annotation.value, ast.Name):
-                        param_annotations[arg.arg] = arg.annotation.value.id
-                    else:
-                        param_annotations[arg.arg] = "complex_type"
-                else:
-                    param_annotations[arg.arg] = "complex_type"
-
-        # Compare docstring types with annotations
-        for arg in docstring_dict["args"]:
-            # Ensure arg is a dictionary with the expected keys
-            if not isinstance(arg, dict) or "name" not in arg or "type" not in arg:
-                continue
-
-            param_name = arg["name"]
-            docstring_type = arg["type"]
-
-            # Skip if either is None
-            if param_name is None or docstring_type is None:
-                continue
-
-            if param_name in param_annotations:
-                annotation_type = param_annotations[param_name]
-
-                # Simple comparison - just check if the base type is mentioned in the docstring
-                docstring_lower = docstring_type.lower()
-                annotation_lower = annotation_type.lower()
-
-                # Basic type check - this is very simplified
-                if (annotation_lower not in docstring_lower and
-                    not (annotation_lower == "str" and "string" in docstring_lower) and
-                    not (annotation_lower == "int" and "integer" in docstring_lower) and
-                    not (annotation_lower == "bool" and "boolean" in docstring_lower)):
-                    errors.append(
-                        f"Type mismatch for parameter '{param_name}': "
-                        f"docstring says '{docstring_type}', annotation is '{annotation_type}'"
-                    )
-
-        # Check return type if present
-        if ("returns" in docstring_dict and
-            isinstance(docstring_dict["returns"], list) and
-            len(docstring_dict["returns"]) > 0 and
-            isinstance(docstring_dict["returns"][0], dict) and
-            "type" in docstring_dict["returns"][0] and
-            hasattr(node, "returns") and
-            node.returns is not None):
-
-            docstring_return = docstring_dict["returns"][0]["type"]
-            if docstring_return is None:
-                docstring_return = "None"
-
-            # Get a simple string representation of the return annotation
-            if isinstance(node.returns, ast.Name):
-                return_annotation = node.returns.id
-            elif isinstance(node.returns, ast.Subscript):
-                if isinstance(node.returns.value, ast.Name):
-                    return_annotation = node.returns.value.id
-                else:
-                    return_annotation = "complex_type"
-            else:
-                return_annotation = "complex_type"
-
-            # Simple comparison for return type
-            docstring_lower = docstring_return.lower()
-            annotation_lower = return_annotation.lower()
-
-            if (annotation_lower not in docstring_lower and
-                not (annotation_lower == "str" and "string" in docstring_lower) and
-                not (annotation_lower == "int" and "integer" in docstring_lower) and
-                not (annotation_lower == "bool" and "boolean" in docstring_lower)):
-                errors.append(
-                    f"Return type mismatch: docstring says '{docstring_return}', "
-                    f"annotation is '{return_annotation}'"
-                )
-
-    except Exception as e:
-        errors.append(f"Error checking type consistency: {str(e)}")
-
-    return errors
-
-
 def validate_docstring(docstring: str) -> list[str]:
     """Perform additional validation on a docstring.
 
@@ -367,7 +137,8 @@ def validate_docstring(docstring: str) -> list[str]:
             continue
 
         # Check for parameter definitions with unclosed parentheses
-        param_match = re.match(r"^\s*(\w+)\s+\(([^)]*$)", line)
+        # Improved regex to better detect unclosed parentheses and brackets
+        param_match = re.match(r"^\s*(\w+)\s+\(([^)]*$|.*\[[^\]]*$)", line)
         if param_match:
             errors.append(f"Unclosed parenthesis in parameter type: '{line}'")
 
@@ -396,7 +167,6 @@ def validate_docstring(docstring: str) -> list[str]:
 def check_file(
     file_path: Path,
     require_param_types: bool = False,
-    check_type_consistency: bool = False,
     verbose: bool = False
 ) -> list[str]:
     """Check docstrings in a file.
@@ -404,7 +174,6 @@ def check_file(
     Args:
         file_path: Path to the Python file
         require_param_types: Whether parameter types are required
-        check_type_consistency: Whether to check if docstring types match annotations
         verbose: Whether to print verbose output
 
     Returns:
@@ -461,32 +230,6 @@ def check_file(
                     if verbose:
                         print(error_msg)
 
-            # Check type consistency if required
-            if check_type_consistency and node is not None:
-                try:
-                    if verbose:
-                        print(f"Checking type consistency for {name}")
-
-                    # Debug: Print the node type
-                    if verbose:
-                        print(f"Node type: {type(node)}")
-
-                    consistency_errors = verify_type_consistency(node, parsed)
-                    for error in consistency_errors:
-                        error_msg = f"{file_path}:{line_no}: {error} in '{name}'"
-                        errors.append(error_msg)
-                        if verbose:
-                            print(error_msg)
-                except Exception as e:
-                    error_msg = f"{file_path}:{line_no}: Error checking type consistency for '{name}': {str(e)}"
-                    errors.append(error_msg)
-                    if verbose:
-                        print(error_msg)
-                    # Debug: Print the exception traceback
-                    if verbose:
-                        import traceback
-                        print(f"Exception traceback: {traceback.format_exc()}")
-
         except Exception as e:
             error_msg = f"{file_path}:{line_no}: Error parsing docstring for '{name}': {e!s}"
             errors.append(error_msg)
@@ -500,7 +243,6 @@ def scan_directory(
     directory: Path,
     exclude_files: list[str] = None,
     require_param_types: bool = False,
-    check_type_consistency: bool = False,
     verbose: bool = False,
 ) -> list[str]:
     """Scan a directory for Python files and check their docstrings.
@@ -509,7 +251,6 @@ def scan_directory(
         directory: Directory to scan
         exclude_files: List of filenames to exclude
         require_param_types: Whether parameter types are required
-        check_type_consistency: Whether to check if docstring types match annotations
         verbose: Whether to print verbose output
 
     Returns:
@@ -533,7 +274,7 @@ def scan_directory(
                 break
 
         if not should_exclude:
-            errors.extend(check_file(py_file, require_param_types, check_type_consistency, verbose))
+            errors.extend(check_file(py_file, require_param_types, verbose))
     return errors
 
 
@@ -591,11 +332,6 @@ def main():
         help="Require parameter types in docstrings",
     )
     parser.add_argument(
-        "--check-type-consistency",
-        action="store_true",
-        help="Check if types in docstrings match function annotations",
-    )
-    parser.add_argument(
         "--exclude-files",
         help="Comma-separated list of filenames to exclude",
         default="",
@@ -623,13 +359,6 @@ def main():
         if not require_param_types:
             require_param_types = config["require_param_types"]
 
-    # Get check_type_consistency
-    check_type_consistency = args.check_type_consistency
-    if not check_type_consistency:
-        check_type_consistency = get_env_var_as_bool("DOCSTRING_CHECK_TYPE_CONSISTENCY")
-        if not check_type_consistency:
-            check_type_consistency = config["check_type_consistency"]
-
     # Get verbose
     verbose = args.verbose
     if not verbose:
@@ -655,10 +384,10 @@ def main():
     for path_str in paths:
         path = Path(path_str)
         if path.is_dir():
-            errors = scan_directory(path, exclude_files, require_param_types, check_type_consistency, verbose)
+            errors = scan_directory(path, exclude_files, require_param_types, verbose)
             all_errors.extend(errors)
         elif path.is_file() and path.suffix == ".py":
-            errors = check_file(path, require_param_types, check_type_consistency, verbose)
+            errors = check_file(path, require_param_types, verbose)
             all_errors.extend(errors)
         else:
             print(f"Error: {path} is not a directory or Python file")

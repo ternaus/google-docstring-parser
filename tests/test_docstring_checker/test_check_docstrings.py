@@ -99,12 +99,3 @@ def test_verbose_output() -> None:
 
     # Check that the output contains checking messages
     assert "Checking" in result.stdout, "Verbose output should include 'Checking' messages"
-
-
-if __name__ == "__main__":
-    # Run the tests manually
-    test_valid_docstrings()
-    test_malformed_docstrings()
-    test_require_param_types()
-    test_verbose_output()
-    print("All tests passed!")

@@ -90,6 +90,7 @@ def parse_google_docstring(docstring: str) -> dict[str, Any]:
     result: dict[str, Any] = {
         "description": "",
         "args": [],
+        "returns": [],
     }
 
     # Extract sections
@@ -103,8 +104,29 @@ def parse_google_docstring(docstring: str) -> dict[str, Any]:
     if "args" in sections:
         result["args"] = _parse_args_section(sections["args"])
 
+    # Process returns
+    if "returns" in sections:
+        # Parse returns section similar to args
+        returns_lines = sections["returns"].split("\n")
+        if returns_lines:
+            # Extract return type and description
+            return_match = re.match(r"^(?:(\w+):\s*)?(.*)$", returns_lines[0].strip())
+            if return_match:
+                return_type = return_match.group(1)
+                return_desc = return_match.group(2)
+                if return_desc:
+                    result["returns"] = [{"type": return_type, "description": return_desc}]
+                else:
+                    result["returns"] = []
+
     # Add other sections directly
-    result.update({section: content for section, content in sections.items() if section not in ["description", "args"]})
+    result.update(
+        {
+            section: content
+            for section, content in sections.items()
+            if section not in ["description", "args", "returns"]
+        },
+    )
 
     return result
 
