@@ -160,8 +160,10 @@ def validate_docstring(docstring: str) -> list[str]:
 
         # Check for parameter definitions with unclosed parentheses
         # Improved regex to better detect unclosed parentheses and brackets
-        param_match = re.match(r"^\s*(\w+)\s+\(([^)]*$|.*\[[^\]]*$)", stripped_line)
-        if param_match:
+        if param_match := re.match(
+            r"^\s*(\w+)\s+\(([^)]*$|.*\[[^\]]*$)",
+            stripped_line,
+        ):
             errors.append(f"Unclosed parenthesis in parameter type: '{stripped_line}'")
 
         # Check for invalid type declarations
@@ -355,7 +357,7 @@ def _get_config_values(args: argparse.Namespace, config: dict[str, Any]) -> tupl
     require_param_types = args.require_param_types if args.require_param_types else config["require_param_types"]
 
     # Get verbose
-    verbose = args.verbose if args.verbose else config["verbose"]
+    verbose = args.verbose or config["verbose"]
 
     # Get exclude_files
     exclude_files = []
@@ -418,11 +420,12 @@ def main():
         print(f"  Require parameter types: {require_param_types}")
         print(f"  Exclude files: {exclude_files}")
 
-    # Process paths and collect errors
-    all_errors = _process_paths(paths, exclude_files, require_param_types, verbose)
-
-    # Report results
-    if all_errors:
+    if all_errors := _process_paths(
+        paths,
+        exclude_files,
+        require_param_types,
+        verbose,
+    ):
         for error in all_errors:
             print(error)
         sys.exit(1)
