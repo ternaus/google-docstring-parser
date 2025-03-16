@@ -175,3 +175,85 @@ def function_with_missing_type(param1):
         # Clean up the temporary file
         if temp_file.exists():
             temp_file.unlink()
+
+
+@pytest.mark.parametrize(
+    "code,expected_count,expected_message",
+    [
+        (
+            '''
+"""Test module with one error."""
+
+def function_with_one_error(param1):
+    """Function with a missing parameter type.
+
+    Args:
+        param1: Parameter without a type
+
+    Returns:
+        None
+    """
+    return None
+''',
+            1,
+            "Found 1 error",
+        ),
+        (
+            '''
+"""Test module with multiple errors."""
+
+def function_with_errors(param1, param2):
+    """Function with multiple errors.
+
+    Args:
+        param1: First parameter without type
+        param2: Second parameter without type
+
+    Returns:
+        None
+    """
+    return None
+
+def another_function(param3):
+    """Another function with error.
+
+    Args:
+        param3: Third parameter without type
+
+    Returns:
+        None
+    """
+    return None
+''',
+            3,
+            "Found 3 errors",
+        ),
+    ],
+)
+def test_error_count_reporting(code: str, expected_count: int, expected_message: str, tmp_path: Path) -> None:
+    """Test that the error count is reported correctly.
+
+    Args:
+        code (str): Python code to test
+        expected_count (int): Expected number of errors
+        expected_message (str): Expected error message
+        tmp_path (Path): Temporary directory fixture
+    """
+    temp_file = tmp_path / "test_file.py"
+    temp_file.write_text(code)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "tools.check_docstrings",
+            str(temp_file),
+            "--require-param-types",
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 1, "Checker should fail when errors are found"
+    assert expected_message in result.stdout, f"Expected error count message '{expected_message}' not found in output"
+    assert result.stdout.count("Parameter") == expected_count, f"Expected {expected_count} parameter type errors"
