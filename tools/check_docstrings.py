@@ -16,7 +16,7 @@ from typing import Any
 
 import tomli
 
-from google_docstring_parser import parse_google_docstring
+from google_docstring_parser.google_docstring_parser import parse_google_docstring
 
 # Default configuration
 DEFAULT_CONFIG = {
@@ -108,11 +108,11 @@ def check_param_types(docstring_dict: dict, require_types: bool) -> list[str]:
     Returns:
         List of error messages for parameters missing types
     """
-    if not require_types or "args" not in docstring_dict:
+    if not require_types or "Args" not in docstring_dict:
         return []
 
     errors = []
-    for arg in docstring_dict["args"]:
+    for arg in docstring_dict["Args"]:
         if arg["type"] is None:
             errors.append(f"Parameter '{arg['name']}' is missing a type")
 

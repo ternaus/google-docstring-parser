@@ -83,4 +83,4 @@ repos:
         require_serial: true
         # Configuration is now in pyproject.toml
         args: []
-        additional_dependencies: ["tomli>=2.0.0"]
+        additional_dependencies: ["tomli>=2.0.0", "docstring-parser>=0.16"]

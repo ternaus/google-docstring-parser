@@ -11,7 +11,7 @@ from tools.check_docstrings import (
     check_param_types,
     get_docstrings,
 )
-from google_docstring_parser import parse_google_docstring
+from google_docstring_parser.google_docstring_parser import parse_google_docstring
 
 
 @pytest.mark.parametrize(
@@ -224,9 +224,9 @@ def test_parse_google_docstring(docstring: str, expected_args_count: int, expect
     parsed = parse_google_docstring(docstring)
 
     # Check args count
-    args = parsed.get("args", [])
-    assert len(args) == expected_args_count
+    args = parsed.get("Args", [])
+    assert len(args) == expected_args_count, f"Expected {expected_args_count} args, got {args}"
 
     # Check returns count
-    returns = parsed.get("returns", [])
+    returns = parsed.get("Returns", [])
     assert len(returns) == expected_returns_count
