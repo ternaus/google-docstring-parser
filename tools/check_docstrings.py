@@ -31,11 +31,11 @@ class DocstringContext(NamedTuple):
     """Context for docstring processing.
 
     Args:
-        file_path: Path to the file
-        line_no: Line number
-        name: Name of the function or class
-        verbose: Whether to print verbose output
-        require_param_types: Whether parameter types are required
+        file_path (Path): Path to the file
+        line_no (int): Line number
+        name (str): Name of the function or class
+        verbose (bool): Whether to print verbose output
+        require_param_types (bool): Whether parameter types are required
     """
 
     file_path: Path
@@ -87,7 +87,7 @@ def get_docstrings(file_path: Path) -> list[tuple[str, int, str | None, ast.AST 
     """Extract docstrings from a Python file.
 
     Args:
-        file_path: Path to the Python file
+        file_path (Path): Path to the Python file
 
     Returns:
         List of tuples containing (function/class name, line number, docstring, node)
@@ -121,8 +121,8 @@ def check_param_types(docstring_dict: dict, require_types: bool) -> list[str]:
     """Check if all parameters have types if required.
 
     Args:
-        docstring_dict: Parsed docstring dictionary
-        require_types: Whether parameter types are required
+        docstring_dict (dict): Parsed docstring dictionary
+        require_types (bool): Whether parameter types are required
 
     Returns:
         List of error messages for parameters missing types
@@ -137,7 +137,7 @@ def validate_docstring(docstring: str) -> list[str]:
     """Perform additional validation on a docstring.
 
     Args:
-        docstring: The docstring to validate
+        docstring (str): The docstring to validate
 
     Returns:
         List of validation error messages
@@ -164,8 +164,8 @@ def _format_error(context: DocstringContext, error: str) -> str:
     """Format an error message.
 
     Args:
-        context: Docstring context
-        error: Error message
+        context (DocstringContext): Docstring context
+        error (str): Error message
 
     Returns:
         Formatted error message
@@ -180,8 +180,8 @@ def _handle_validation_errors(
     """Handle validation errors for a docstring.
 
     Args:
-        context: Docstring context
-        docstring: The docstring to validate
+        context (DocstringContext): Docstring context
+        docstring (str): The docstring to validate
 
     Returns:
         List of error messages
@@ -210,8 +210,8 @@ def _handle_param_type_errors(
     """Handle parameter type errors for a docstring.
 
     Args:
-        context: Docstring context
-        parsed: Parsed docstring
+        context (DocstringContext): Docstring context
+        parsed (dict): Parsed docstring
 
     Returns:
         List of error messages
@@ -243,8 +243,8 @@ def _process_docstring(
     """Process a single docstring.
 
     Args:
-        context: Docstring context
-        docstring: The docstring to process
+        context (DocstringContext): Docstring context
+        docstring (str): The docstring to process
 
     Returns:
         List of error messages
@@ -281,9 +281,9 @@ def check_file(
     """Check docstrings in a file.
 
     Args:
-        file_path: Path to the Python file
-        require_param_types: Whether parameter types are required
-        verbose: Whether to print verbose output
+        file_path (Path): Path to the Python file
+        require_param_types (bool): Whether parameter types are required
+        verbose (bool): Whether to print verbose output
 
     Returns:
         List of error messages
@@ -324,10 +324,10 @@ def scan_directory(
     """Scan a directory for Python files and check their docstrings.
 
     Args:
-        directory: Directory to scan
-        exclude_files: List of filenames to exclude
-        require_param_types: Whether parameter types are required
-        verbose: Whether to print verbose output
+        directory (Path): Directory to scan
+        exclude_files (list[str] | None): List of filenames to exclude
+        require_param_types (bool): Whether parameter types are required
+        verbose (bool): Whether to print verbose output
 
     Returns:
         List of error messages
@@ -386,8 +386,8 @@ def _get_config_values(args: argparse.Namespace, config: dict[str, Any]) -> tupl
     """Get configuration values from command line args and config.
 
     Args:
-        args: Command line arguments
-        config: Configuration from pyproject.toml
+        args (argparse.Namespace): Command line arguments
+        config (dict[str, Any]): Configuration from pyproject.toml
 
     Returns:
         Tuple of (paths, require_param_types, verbose, exclude_files)
@@ -405,7 +405,9 @@ def _get_config_values(args: argparse.Namespace, config: dict[str, Any]) -> tupl
     exclude_files = []
     if args.exclude_files:
         exclude_files = [f.strip() for f in args.exclude_files.split(",") if f.strip()]
-    elif not exclude_files:
+
+    # If no exclude_files specified on command line, use the ones from config
+    if not exclude_files:
         exclude_files = config["exclude_files"]
 
     return paths, require_param_types, verbose, exclude_files
@@ -420,10 +422,10 @@ def _process_paths(
     """Process paths and collect errors.
 
     Args:
-        paths: List of paths to process
-        exclude_files: List of files to exclude
-        require_param_types: Whether to require parameter types
-        verbose: Whether to print verbose output
+        paths (list[str]): List of paths to process
+        exclude_files (list[str]): List of files to exclude
+        require_param_types (bool): Whether to require parameter types
+        verbose (bool): Whether to print verbose output
 
     Returns:
         List of error messages
@@ -452,6 +454,13 @@ def main():
 
     # Get configuration values
     paths, require_param_types, verbose, exclude_files = _get_config_values(args, config)
+
+    # Print configuration if verbose
+    if verbose:
+        print("Configuration:")
+        print(f"  Paths: {paths}")
+        print(f"  Require parameter types: {require_param_types}")
+        print(f"  Exclude files: {exclude_files}")
 
     # Process paths and collect errors
     all_errors = _process_paths(paths, exclude_files, require_param_types, verbose)

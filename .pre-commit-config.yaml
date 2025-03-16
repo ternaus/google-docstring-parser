@@ -81,6 +81,6 @@ repos:
         types: [python]
         pass_filenames: false
         require_serial: true
-        # Configuration is now in pyproject.toml
+        # Configuration is in pyproject.toml
         args: []
         additional_dependencies: ["tomli>=2.0.0", "docstring-parser>=0.16"]
