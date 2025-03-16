@@ -13,7 +13,6 @@ from google_docstring_parser.docstring_parser import parse_google_docstring, _pa
             """Simple description.""",
             {
                 "description": "Simple description.",
-                "args": [],
             },
         ),
 
