@@ -428,6 +428,7 @@ def main():
     ):
         for error in all_errors:
             print(error)
+        print(f"\nFound {len(all_errors)} error{'s' if len(all_errors) != 1 else ''}")
         sys.exit(1)
     elif verbose:
         print("All docstrings parsed successfully!")
