@@ -1,0 +1,11 @@
+---
+description: python files
+globs: *.py
+alwaysApply: false
+---
+
+# Your rule content
+
+- We use python 3.10 typing
+- For tests we use pytest and parametrize
+- We use Google type dosctrings.

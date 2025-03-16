@@ -1,0 +1,86 @@
+name: CI
+on:
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'  # Ignore all markdown files
+      - 'docs/**'  # Ignore documentation changes
+jobs:
+  test_and_lint:
+    name: Test and lint
+    runs-on: ${{ matrix.operating-system }}
+    strategy:
+      matrix:
+        operating-system: [ubuntu-latest, windows-latest, macos-13]
+        python-version: ["3.10", "3.11", "3.12"]
+        include:
+          - operating-system: ubuntu-latest
+            path: ~/.cache/pip
+          - operating-system: windows-latest
+            path: ~\AppData\Local\pip\Cache
+          - operating-system: macos-13
+            path: ~/Library/Caches/pip
+      fail-fast: true
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+        cache-dependency-path: |
+          requirements-dev.txt
+
+    - name: Cache Python packages
+      uses: actions/cache@v4
+      with:
+        path: ${{ matrix.path }}
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements-dev.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-${{ matrix.python-version }}-
+          ${{ runner.os }}-pip-
+
+    - name: Install uv
+      run: pip install uv
+
+    - name: Install dependencies
+      run: |
+        uv pip install --system --upgrade pip wheel
+        uv pip install --system -r requirements-dev.txt
+        uv pip install --system .
+
+    - name: Run PyTest with coverage
+      run: pytest
+
+  check_code_formatting_types:
+    name: Check code formatting with ruff and mypy
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+        cache-dependency-path: |
+          requirements-dev.txt
+
+    - name: Install uv
+      run: pip install uv
+
+    - name: Install requirements
+      run: |
+        uv pip install --system --upgrade pip
+        uv pip install --system -r requirements-dev.txt
+        uv pip install --system .
+
+    - name: Run checks
+      run: pre-commit run --all-files

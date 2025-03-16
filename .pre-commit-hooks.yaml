@@ -1,0 +1,14 @@
+- id: check-google-docstrings
+  name: Check Google-style docstrings can be parsed
+  description: >
+    Checks that Google-style docstrings in specified folders can be parsed with google_docstring_parser.
+    Configured via pyproject.toml under [tool.docstring_checker] section.
+  entry: python -m tools.check_docstrings
+  language: python
+  types: [python]
+  pass_filenames: false
+  require_serial: true
+  args: []  # Default empty args
+  # Define configuration options
+  minimum_pre_commit_version: "2.9.0"  # Required for additional_dependencies
+  additional_dependencies: ["tomli>=2.0.0"]
