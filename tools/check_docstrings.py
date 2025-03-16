@@ -133,9 +133,9 @@ def check_param_types(docstring_dict: dict[str, Any], require_types: bool) -> li
     errors = []
     for arg in docstring_dict["Args"]:
         if arg["type"] is None:
-            errors.append(f"Parameter '{arg['name']}' is missing a type")
+            errors.append(f"Parameter '{arg['name']}' is missing a type in docstring")
         elif "invalid type" in arg["type"].lower():
-            errors.append(f"Parameter '{arg['name']}' has an invalid type: '{arg['type']}'")
+            errors.append(f"Parameter '{arg['name']}' has an invalid type in docstring: '{arg['type']}'")
 
     return errors
 

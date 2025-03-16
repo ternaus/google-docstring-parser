@@ -100,7 +100,7 @@ def test_validate_docstring(docstring: str, expected_errors: list[str]) -> None:
                 ],
             },
             True,
-            ["Parameter 'param1' is missing a type"],
+            ["Parameter 'param1' is missing a type in docstring"],
         ),
         # Multiple missing types
         (
@@ -113,7 +113,7 @@ def test_validate_docstring(docstring: str, expected_errors: list[str]) -> None:
                 ],
             },
             True,
-            ["Parameter 'param1' is missing a type", "Parameter 'param2' is missing a type"],
+            ["Parameter 'param1' is missing a type in docstring", "Parameter 'param2' is missing a type in docstring"],
         ),
         # Missing types but not required
         (
