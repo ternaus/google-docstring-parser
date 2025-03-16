@@ -74,9 +74,6 @@ Output:
 - Preserves other sections like Examples, Notes, etc.
 - Handles multi-line descriptions and indentation properly
 
-## License
-
-MIT
 
 ## Pre-commit Hook
 
