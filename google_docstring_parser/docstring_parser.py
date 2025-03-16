@@ -88,10 +88,9 @@ def parse_google_docstring(docstring: str) -> dict[str, Any]:
     # Clean up the docstring
     docstring = docstring.strip()
 
-    # Initialize result dictionary
+    # Initialize result dictionary with only description and returns
     result: dict[str, Any] = {
         "description": "",
-        "args": [],
         "returns": [],
     }
 
@@ -102,7 +101,7 @@ def parse_google_docstring(docstring: str) -> dict[str, Any]:
     if "description" in sections:
         result["description"] = sections["description"]
 
-    # Process args
+    # Process args (only if present)
     if "args" in sections:
         result["args"] = _parse_args_section(sections["args"])
 
