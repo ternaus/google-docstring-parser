@@ -23,6 +23,8 @@ from typing import Any
 
 from docstring_parser import parse
 
+__all__ = ["parse_google_docstring"]
+
 
 def _extract_sections(docstring: str) -> dict[str, str]:
     """Extract sections from a docstring.
