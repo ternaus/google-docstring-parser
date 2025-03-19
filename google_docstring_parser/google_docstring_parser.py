@@ -26,6 +26,38 @@ from docstring_parser import parse
 __all__ = ["parse_google_docstring"]
 
 
+class ReferenceFormatError(ValueError):
+    """Error raised when a reference format is invalid."""
+
+
+class MissingDashError(ReferenceFormatError):
+    """Error raised when a multiple reference doesn't start with a dash."""
+
+    def __init__(self) -> None:
+        super().__init__("Multiple references must all start with dash (-)")
+
+
+class DashInSingleReferenceError(ReferenceFormatError):
+    """Error raised when a single reference starts with a dash."""
+
+    def __init__(self) -> None:
+        super().__init__("Single reference should not start with dash (-)")
+
+
+class MissingColonError(ReferenceFormatError):
+    """Error raised when a reference is missing a colon separator."""
+
+    def __init__(self, line: str) -> None:
+        super().__init__(f"Invalid reference format, missing colon separator: {line}")
+
+
+class EmptyDescriptionError(ReferenceFormatError):
+    """Error raised when a reference has an empty description."""
+
+    def __init__(self, line: str) -> None:
+        super().__init__(f"Invalid reference format, empty description: {line}")
+
+
 def _extract_sections(docstring: str) -> dict[str, str]:
     """Extract sections from a docstring.
 
@@ -77,6 +109,80 @@ def _extract_sections(docstring: str) -> dict[str, str]:
     return sections
 
 
+def _parse_references(reference_content: str) -> list[dict[str, str]]:
+    """Parse references section into structured format.
+
+    Args:
+        reference_content (str): The content of the References section
+
+    Returns:
+        A list of dictionaries with 'description' and 'source' keys
+
+    Raises:
+        MissingDashError: If multiple references don't all start with dash
+        DashInSingleReferenceError: If a single reference starts with dash
+        MissingColonError: If a reference is missing a colon separator
+        EmptyDescriptionError: If a reference has an empty description
+    """
+    references = []
+    lines = [line.strip() for line in reference_content.strip().split("\n") if line.strip()]
+
+    # If we have multiple lines, all should start with dash
+    if len(lines) > 1:
+        if not all(line.startswith("-") for line in lines):
+            raise MissingDashError
+
+        for line in lines:
+            # Remove the dash and strip
+            content = line[1:].strip()
+
+            # Check for colon separator
+            if ":" not in content:
+                raise MissingColonError(line)
+
+            description, source = content.split(":", 1)
+
+            # Make sure the description isn't empty
+            if not description.strip():
+                raise EmptyDescriptionError(line)
+
+            references.append(
+                {
+                    "description": description.strip(),
+                    "source": source.strip(),
+                },
+            )
+    else:
+        # Single reference
+        line = lines[0] if lines else ""
+
+        # Remove dash before checking for colon to correctly report error type
+        content = line[1:].strip() if line.startswith("-") else line
+
+        # Check for colon separator first
+        if ":" not in content:
+            raise MissingColonError(line)
+
+        # Now check if it has a dash (which it shouldn't)
+        if line.startswith("-"):
+            raise DashInSingleReferenceError
+
+        description, source = content.split(":", 1)
+
+        # Make sure the description isn't empty
+        if not description.strip():
+            raise EmptyDescriptionError(line)
+
+        references.append(
+            {
+                "description": description.strip(),
+                "source": source.strip(),
+            },
+        )
+
+    return references
+
+
 def parse_google_docstring(docstring: str) -> dict[str, Any]:
     """Parse a Google-style docstring into a structured dictionary.
 
@@ -126,6 +232,14 @@ def parse_google_docstring(docstring: str) -> dict[str, Any]:
         result["Returns"] = [{"type": return_match[1], "description": return_desc.rstrip()}]
     else:
         result["Returns"] = []
+
+    # Process references section
+    for ref_section in ["References", "Reference"]:
+        if ref_section in sections:
+            result[ref_section] = _parse_references(sections[ref_section])
+            # Don't add this section to the general sections mapping later
+            sections.pop(ref_section, None)
+            break
 
     # Add other sections directly using dict union
     return result | {

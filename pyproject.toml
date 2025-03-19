@@ -104,6 +104,8 @@ format.skip-magic-trailing-comma = false
 # Like Black, automatically detect the appropriate line ending.
 lint.select = [ "ALL" ]
 lint.ignore = [
+  "EM101",
+  "EM102",
 ]
 
 # Allow fix for all enabled rules (when `--fix`) is provided.
