@@ -109,6 +109,79 @@ def _extract_sections(docstring: str) -> dict[str, str]:
     return sections
 
 
+def _find_separator_colon(content: str) -> int:
+    """Find the index of a colon separator that's not part of a URL.
+
+    Args:
+        content (str): The content to search in
+
+    Returns:
+        The index of the separator colon, or -1 if not found
+    """
+    # Skip colon in URLs like http://, https://, ftp://, etc.
+    content_parts = content.split("://", 1)
+
+    # If there was a protocol in the content, look for a colon after the protocol part
+    if len(content_parts) > 1:
+        protocol = content_parts[0]
+        rest = content_parts[1]
+
+        # Search for a colon in the part after the protocol
+        if ":" in rest:
+            return len(protocol) + 3 + rest.index(":")  # 3 is for "://"
+        # If no colon in rest, check for a colon before the protocol (in the description)
+        if ":" in protocol:
+            return protocol.index(":")
+    elif ":" in content:
+        # No protocol found, just find the first colon
+        return content.index(":")
+
+    # No colon found
+    return -1
+
+
+def _parse_reference_line(line: str, *, is_single: bool = False) -> dict[str, str]:
+    """Parse a single reference line.
+
+    Args:
+        line (str): The line to parse
+        is_single (bool): Whether this is a single reference (not part of a list)
+
+    Returns:
+        A dictionary with 'description' and 'source' keys
+
+    Raises:
+        DashInSingleReferenceError: If a single reference starts with a dash
+        MissingColonError: If a reference is missing a colon separator
+        EmptyDescriptionError: If a reference has an empty description
+    """
+    # Check if single reference has a dash (which it shouldn't)
+    if is_single and line.startswith("-"):
+        raise DashInSingleReferenceError
+
+    # Remove dash if present
+    content = line[1:].strip() if line.startswith("-") else line
+
+    # Find separator colon
+    colon_index = _find_separator_colon(content)
+
+    # If no valid colon found, raise an error
+    if colon_index == -1:
+        raise MissingColonError(line)
+
+    description = content[:colon_index].strip()
+    source = content[colon_index + 1 :].strip()
+
+    # Make sure the description isn't empty
+    if not description:
+        raise EmptyDescriptionError(line)
+
+    return {
+        "description": description,
+        "source": source,
+    }
+
+
 def _parse_references(reference_content: str) -> list[dict[str, str]]:
     """Parse references section into structured format.
 
@@ -124,61 +197,23 @@ def _parse_references(reference_content: str) -> list[dict[str, str]]:
         MissingColonError: If a reference is missing a colon separator
         EmptyDescriptionError: If a reference has an empty description
     """
-    references = []
+    references: list[dict[str, str]] = []
     lines = [line.strip() for line in reference_content.strip().split("\n") if line.strip()]
+
+    # Handle empty reference content
+    if not lines:
+        return references
 
     # If we have multiple lines, all should start with dash
     if len(lines) > 1:
         if not all(line.startswith("-") for line in lines):
             raise MissingDashError
 
-        for line in lines:
-            # Remove the dash and strip
-            content = line[1:].strip()
-
-            # Check for colon separator
-            if ":" not in content:
-                raise MissingColonError(line)
-
-            description, source = content.split(":", 1)
-
-            # Make sure the description isn't empty
-            if not description.strip():
-                raise EmptyDescriptionError(line)
-
-            references.append(
-                {
-                    "description": description.strip(),
-                    "source": source.strip(),
-                },
-            )
+        # Process each line in the multi-line case using list comprehension
+        references.extend(_parse_reference_line(line) for line in lines)
     else:
-        # Single reference
-        line = lines[0] if lines else ""
-
-        # Remove dash before checking for colon to correctly report error type
-        content = line[1:].strip() if line.startswith("-") else line
-
-        # Check for colon separator first
-        if ":" not in content:
-            raise MissingColonError(line)
-
-        # Now check if it has a dash (which it shouldn't)
-        if line.startswith("-"):
-            raise DashInSingleReferenceError
-
-        description, source = content.split(":", 1)
-
-        # Make sure the description isn't empty
-        if not description.strip():
-            raise EmptyDescriptionError(line)
-
-        references.append(
-            {
-                "description": description.strip(),
-                "source": source.strip(),
-            },
-        )
+        # Single reference case
+        references.append(_parse_reference_line(lines[0], is_single=True))
 
     return references
 

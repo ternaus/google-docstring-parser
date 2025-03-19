@@ -181,3 +181,38 @@ def test_parse_references_single_missing_colon() -> None:
 
     with pytest.raises(MissingColonError):
         parse_google_docstring(docstring)
+
+
+def test_parse_references_colon_only_in_url() -> None:
+    docstring = '''Test function with reference where colon only exists in URL.
+
+    Args:
+        x: A parameter
+
+    Returns:
+        Result value
+
+    Reference:
+        Documentation for library https://example.com/docs
+    '''
+
+    with pytest.raises(MissingColonError):
+        parse_google_docstring(docstring)
+
+
+def test_parse_references_colon_only_in_url_multiline() -> None:
+    docstring = '''Test function with references where colon only exists in URL.
+
+    Args:
+        x: A parameter
+
+    Returns:
+        Result value
+
+    References:
+        - Documentation for library https://example.com/docs
+        - Another reference https://stackoverflow.com/q/12345
+    '''
+
+    with pytest.raises(MissingColonError):
+        parse_google_docstring(docstring)
