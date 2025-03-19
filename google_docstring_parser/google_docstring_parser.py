@@ -23,7 +23,55 @@ from typing import Any
 
 from docstring_parser import parse
 
-__all__ = ["parse_google_docstring"]
+__all__ = ["ReferenceFormatError", "parse_google_docstring"]
+
+
+class ReferenceFormatError(ValueError):
+    """Error raised when a reference format is invalid.
+
+    Args:
+        code (str): Error code identifying the specific format issue
+        line (str): The reference line that caused the error (optional)
+    """
+
+    def __init__(self, code: str, line: str = "") -> None:
+        messages = {
+            "missing_dash": "Multiple references must all start with dash (-)",
+            "dash_in_single": "Single reference should not start with dash (-)",
+            "missing_colon": f"Invalid reference format, missing colon separator: {line}",
+            "empty_description": f"Invalid reference format, empty description: {line}",
+        }
+        self.code = code
+        super().__init__(messages.get(code, "Reference Format Error"))
+
+
+# Legacy error classes - kept for backward compatibility
+class MissingDashError(ReferenceFormatError):
+    """Error raised when a multiple reference doesn't start with a dash."""
+
+    def __init__(self) -> None:
+        super().__init__("missing_dash")
+
+
+class DashInSingleReferenceError(ReferenceFormatError):
+    """Error raised when a single reference starts with a dash."""
+
+    def __init__(self) -> None:
+        super().__init__("dash_in_single")
+
+
+class MissingColonError(ReferenceFormatError):
+    """Error raised when a reference is missing a colon separator."""
+
+    def __init__(self, line: str) -> None:
+        super().__init__("missing_colon", line)
+
+
+class EmptyDescriptionError(ReferenceFormatError):
+    """Error raised when a reference has an empty description."""
+
+    def __init__(self, line: str) -> None:
+        super().__init__("empty_description", line)
 
 
 def _extract_sections(docstring: str) -> dict[str, str]:
@@ -77,6 +125,110 @@ def _extract_sections(docstring: str) -> dict[str, str]:
     return sections
 
 
+def _find_separator_colon(content: str) -> int:
+    """Find the index of a colon separator that's not part of a URL.
+
+    Args:
+        content (str): The content to search in
+
+    Returns:
+        The index of the separator colon, or -1 if not found
+    """
+    # Skip colon in URLs like http://, https://, ftp://, etc.
+    content_parts = content.split("://", 1)
+
+    # If there was a protocol in the content, look for a colon after the protocol part
+    if len(content_parts) > 1:
+        protocol = content_parts[0]
+        rest = content_parts[1]
+
+        # Search for a colon in the part after the protocol
+        if ":" in rest:
+            return len(protocol) + 3 + rest.index(":")  # 3 is for "://"
+        # If no colon in rest, check for a colon before the protocol (in the description)
+        if ":" in protocol:
+            return protocol.index(":")
+    elif ":" in content:
+        # No protocol found, just find the first colon
+        return content.index(":")
+
+    # No colon found
+    return -1
+
+
+def _parse_reference_line(line: str, *, is_single: bool = False) -> dict[str, str]:
+    """Parse a single reference line.
+
+    Args:
+        line (str): The line to parse
+        is_single (bool): Whether this is a single reference (not part of a list)
+
+    Returns:
+        A dictionary with 'description' and 'source' keys
+
+    Raises:
+        ReferenceFormatError: If the reference format is invalid
+    """
+    # Check if single reference has a dash (which it shouldn't)
+    if is_single and line.startswith("-"):
+        raise ReferenceFormatError("dash_in_single")
+
+    # Remove dash if present
+    content = line[1:].strip() if line.startswith("-") else line
+
+    # Find separator colon
+    colon_index = _find_separator_colon(content)
+
+    # If no valid colon found, raise an error
+    if colon_index == -1:
+        raise ReferenceFormatError("missing_colon", line)
+
+    description = content[:colon_index].strip()
+    source = content[colon_index + 1 :].strip()
+
+    # Make sure the description isn't empty
+    if not description:
+        raise ReferenceFormatError("empty_description", line)
+
+    return {
+        "description": description,
+        "source": source,
+    }
+
+
+def _parse_references(reference_content: str) -> list[dict[str, str]]:
+    """Parse references section into structured format.
+
+    Args:
+        reference_content (str): The content of the References section
+
+    Returns:
+        A list of dictionaries with 'description' and 'source' keys
+
+    Raises:
+        ReferenceFormatError: If the reference format is invalid
+    """
+    references: list[dict[str, str]] = []
+    lines = [line.strip() for line in reference_content.strip().split("\n") if line.strip()]
+
+    # Handle empty reference content
+    if not lines:
+        return references
+
+    # If we have multiple lines, all should start with dash
+    if len(lines) > 1:
+        if not all(line.startswith("-") for line in lines):
+            raise ReferenceFormatError("missing_dash")
+
+        # Process each line in the multi-line case using list comprehension
+        references.extend(_parse_reference_line(line) for line in lines)
+    else:
+        # Single reference case
+        references.append(_parse_reference_line(lines[0], is_single=True))
+
+    return references
+
+
 def parse_google_docstring(docstring: str) -> dict[str, Any]:
     """Parse a Google-style docstring into a structured dictionary.
 
@@ -126,6 +278,14 @@ def parse_google_docstring(docstring: str) -> dict[str, Any]:
         result["Returns"] = [{"type": return_match[1], "description": return_desc.rstrip()}]
     else:
         result["Returns"] = []
+
+    # Process references section
+    for ref_section in ["References", "Reference"]:
+        if ref_section in sections:
+            result[ref_section] = _parse_references(sections[ref_section])
+            # Don't add this section to the general sections mapping later
+            sections.pop(ref_section, None)
+            break
 
     # Add other sections directly using dict union
     return result | {

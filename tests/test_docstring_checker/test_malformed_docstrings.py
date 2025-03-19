@@ -83,3 +83,49 @@ def multiple_issues() -> None:
         Something
     """
     return None
+
+
+def function_with_invalid_reference() -> None:
+    """This is a function with an invalid reference.
+
+    Args:
+        x (int): A parameter
+
+    Returns:
+        None
+
+    References:
+        This reference is missing a colon and should trigger an error
+    """
+    pass
+
+
+def function_with_single_reference_and_dash() -> None:
+    """This is a function with a single reference that incorrectly has a dash.
+
+    Args:
+        x (int): A parameter
+
+    Returns:
+        None
+
+    Reference:
+        - This reference shouldn't have a dash for a single reference
+    """
+    pass
+
+
+def function_with_multiple_references_missing_dash() -> None:
+    """This is a function with multiple references missing dashes.
+
+    Args:
+        x (int): A parameter
+
+    Returns:
+        None
+
+    References:
+        First reference: Should have a dash
+        Second reference: Should also have a dash
+    """
+    pass

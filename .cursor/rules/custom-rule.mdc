@@ -1,6 +1,6 @@
 ---
 description: python files
-globs: *.py
+globs:
 alwaysApply: false
 ---
 
@@ -9,3 +9,4 @@ alwaysApply: false
 - We use python 3.10 typing
 - For tests we use pytest and parametrize
 - We use Google type dosctrings.
+- To check syntax we do not run ruff, flake8, but just run pre-commit run --all-files

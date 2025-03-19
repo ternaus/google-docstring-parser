@@ -40,6 +40,9 @@ paths = ["src", "tests"]
 # Whether to require parameter types in docstrings
 require_param_types = true
 
+# Whether to check references for proper format
+check_references = true
+
 # List of filenames to exclude from checks
 # These can be just filenames (e.g., "conftest.py") or paths ending with the filename
 exclude_files = ["conftest.py", "__init__.py", "tests/fixtures/bad_docstrings.py"]
@@ -48,11 +51,37 @@ exclude_files = ["conftest.py", "__init__.py", "tests/fixtures/bad_docstrings.py
 verbose = false
 ```
 
-This approach has several advantages:
-- Keeps all your project configuration in one place
-- Follows modern Python tooling conventions (like mypy, ruff, black, etc.)
-- Makes it easier to maintain and update configuration
-- Provides better IDE support and documentation
+### Features
+
+#### Parameter Type Checking
+
+When `require_param_types = true`, the hook will check if all parameters in docstrings have their types specified. This helps ensure consistent documentation across your codebase.
+
+#### Reference Checking
+
+When `check_references = true`, the hook will validate the References section in docstrings for proper formatting. It checks for:
+
+- Proper separator colon between description and source
+- Proper dash usage (required for multiple references, not allowed for single reference)
+- Empty descriptions or sources
+- URL colons are handled correctly (colons in URLs like https:// are not confused with separator colons)
+
+For a single reference:
+```python
+"""
+References:
+    Paper title: https://example.com/paper
+"""
+```
+
+For multiple references:
+```python
+"""
+References:
+    - First paper: https://example.com/paper1
+    - Second paper: https://example.com/paper2
+"""
+```
 
 ### Example Configuration
 
@@ -61,6 +90,7 @@ This approach has several advantages:
 [tool.docstring_checker]
 paths = ["src", "tests"]
 require_param_types = true
+check_references = true
 exclude_files = ["conftest.py", "__init__.py"]
 verbose = false
 ```
@@ -73,3 +103,18 @@ verbose = false
     - id: check-google-docstrings
       additional_dependencies: ["tomli>=2.0.0"]
 ```
+
+### Command Line Usage
+
+You can also run the docstring checker directly:
+
+```bash
+python -m tools.check_docstrings path/to/file_or_directory --require-param-types --check-references
+```
+
+Command line options:
+- `--require-param-types`: Require parameter types in docstrings
+- `--check-references`: Check references for proper format
+- `--no-check-references`: Skip reference checking
+- `--exclude-files`: Comma-separated list of filenames to exclude
+- `-v, --verbose`: Enable verbose output
