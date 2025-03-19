@@ -23,39 +23,55 @@ from typing import Any
 
 from docstring_parser import parse
 
-__all__ = ["parse_google_docstring"]
+__all__ = ["ReferenceFormatError", "parse_google_docstring"]
 
 
 class ReferenceFormatError(ValueError):
-    """Error raised when a reference format is invalid."""
+    """Error raised when a reference format is invalid.
+
+    Args:
+        code (str): Error code identifying the specific format issue
+        line (str): The reference line that caused the error (optional)
+    """
+
+    def __init__(self, code: str, line: str = "") -> None:
+        messages = {
+            "missing_dash": "Multiple references must all start with dash (-)",
+            "dash_in_single": "Single reference should not start with dash (-)",
+            "missing_colon": f"Invalid reference format, missing colon separator: {line}",
+            "empty_description": f"Invalid reference format, empty description: {line}",
+        }
+        self.code = code
+        super().__init__(messages.get(code, "Reference Format Error"))
 
 
+# Legacy error classes - kept for backward compatibility
 class MissingDashError(ReferenceFormatError):
     """Error raised when a multiple reference doesn't start with a dash."""
 
     def __init__(self) -> None:
-        super().__init__("Multiple references must all start with dash (-)")
+        super().__init__("missing_dash")
 
 
 class DashInSingleReferenceError(ReferenceFormatError):
     """Error raised when a single reference starts with a dash."""
 
     def __init__(self) -> None:
-        super().__init__("Single reference should not start with dash (-)")
+        super().__init__("dash_in_single")
 
 
 class MissingColonError(ReferenceFormatError):
     """Error raised when a reference is missing a colon separator."""
 
     def __init__(self, line: str) -> None:
-        super().__init__(f"Invalid reference format, missing colon separator: {line}")
+        super().__init__("missing_colon", line)
 
 
 class EmptyDescriptionError(ReferenceFormatError):
     """Error raised when a reference has an empty description."""
 
     def __init__(self, line: str) -> None:
-        super().__init__(f"Invalid reference format, empty description: {line}")
+        super().__init__("empty_description", line)
 
 
 def _extract_sections(docstring: str) -> dict[str, str]:
@@ -151,13 +167,11 @@ def _parse_reference_line(line: str, *, is_single: bool = False) -> dict[str, st
         A dictionary with 'description' and 'source' keys
 
     Raises:
-        DashInSingleReferenceError: If a single reference starts with a dash
-        MissingColonError: If a reference is missing a colon separator
-        EmptyDescriptionError: If a reference has an empty description
+        ReferenceFormatError: If the reference format is invalid
     """
     # Check if single reference has a dash (which it shouldn't)
     if is_single and line.startswith("-"):
-        raise DashInSingleReferenceError
+        raise ReferenceFormatError("dash_in_single")
 
     # Remove dash if present
     content = line[1:].strip() if line.startswith("-") else line
@@ -167,14 +181,14 @@ def _parse_reference_line(line: str, *, is_single: bool = False) -> dict[str, st
 
     # If no valid colon found, raise an error
     if colon_index == -1:
-        raise MissingColonError(line)
+        raise ReferenceFormatError("missing_colon", line)
 
     description = content[:colon_index].strip()
     source = content[colon_index + 1 :].strip()
 
     # Make sure the description isn't empty
     if not description:
-        raise EmptyDescriptionError(line)
+        raise ReferenceFormatError("empty_description", line)
 
     return {
         "description": description,
@@ -192,10 +206,7 @@ def _parse_references(reference_content: str) -> list[dict[str, str]]:
         A list of dictionaries with 'description' and 'source' keys
 
     Raises:
-        MissingDashError: If multiple references don't all start with dash
-        DashInSingleReferenceError: If a single reference starts with dash
-        MissingColonError: If a reference is missing a colon separator
-        EmptyDescriptionError: If a reference has an empty description
+        ReferenceFormatError: If the reference format is invalid
     """
     references: list[dict[str, str]] = []
     lines = [line.strip() for line in reference_content.strip().split("\n") if line.strip()]
@@ -207,7 +218,7 @@ def _parse_references(reference_content: str) -> list[dict[str, str]]:
     # If we have multiple lines, all should start with dash
     if len(lines) > 1:
         if not all(line.startswith("-") for line in lines):
-            raise MissingDashError
+            raise ReferenceFormatError("missing_dash")
 
         # Process each line in the multi-line case using list comprehension
         references.extend(_parse_reference_line(line) for line in lines)

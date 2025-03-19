@@ -1,7 +1,7 @@
 import pytest
 
 from google_docstring_parser import parse_google_docstring
-from google_docstring_parser.google_docstring_parser import MissingDashError, DashInSingleReferenceError, MissingColonError
+from google_docstring_parser.google_docstring_parser import ReferenceFormatError
 
 
 def test_parse_references_multiple_with_dash() -> None:
@@ -71,7 +71,7 @@ def test_parse_references_single_with_dash_error() -> None:
         - Documentation: https://example.com/docs
     '''
 
-    with pytest.raises(DashInSingleReferenceError):
+    with pytest.raises(ReferenceFormatError):
         parse_google_docstring(docstring)
 
 
@@ -90,7 +90,7 @@ def test_parse_references_multiple_lines() -> None:
         Stack Overflow: https://stackoverflow.com/a/12345
     '''
 
-    with pytest.raises(MissingDashError):
+    with pytest.raises(ReferenceFormatError):
         parse_google_docstring(docstring)
 
 
@@ -124,7 +124,7 @@ def test_parse_references_missing_dash() -> None:
         Second reference without dash: https://example.com/second
     '''
 
-    with pytest.raises(MissingDashError):
+    with pytest.raises(ReferenceFormatError):
         parse_google_docstring(docstring)
 
 
@@ -143,7 +143,7 @@ def test_parse_references_missing_colon() -> None:
 
     # Single line with dash will raise DashInSingleReferenceError even if it's missing a colon
     # because that check comes after the colon check in our implementation
-    with pytest.raises(DashInSingleReferenceError):
+    with pytest.raises(ReferenceFormatError):
         parse_google_docstring(docstring)
 
 
@@ -162,7 +162,7 @@ def test_parse_references_missing_colon_multiline() -> None:
     '''
 
     # Just check that it raises any ValueError - specific message is implementation detail
-    with pytest.raises(MissingColonError):
+    with pytest.raises(ReferenceFormatError):
         parse_google_docstring(docstring)
 
 
@@ -179,7 +179,7 @@ def test_parse_references_single_missing_colon() -> None:
         Documentation for library without colon
     '''
 
-    with pytest.raises(MissingColonError):
+    with pytest.raises(ReferenceFormatError):
         parse_google_docstring(docstring)
 
 
@@ -196,7 +196,7 @@ def test_parse_references_colon_only_in_url() -> None:
         Documentation for library https://example.com/docs
     '''
 
-    with pytest.raises(MissingColonError):
+    with pytest.raises(ReferenceFormatError):
         parse_google_docstring(docstring)
 
 
@@ -214,5 +214,82 @@ def test_parse_references_colon_only_in_url_multiline() -> None:
         - Another reference https://stackoverflow.com/q/12345
     '''
 
-    with pytest.raises(MissingColonError):
+    with pytest.raises(ReferenceFormatError):
         parse_google_docstring(docstring)
+
+
+def test_parse_references_single_with_dash_error_code() -> None:
+    docstring = '''Test function with a single reference with dash.
+
+    Args:
+        x: A parameter
+
+    Returns:
+        Result value
+
+    Reference:
+        - Documentation: https://example.com/docs
+    '''
+
+    with pytest.raises(ReferenceFormatError) as excinfo:
+        parse_google_docstring(docstring)
+
+    assert excinfo.value.code == "dash_in_single"
+
+
+def test_parse_references_multiple_missing_dash_error_code() -> None:
+    docstring = '''Test function with multiple references without dashes.
+
+    Args:
+        x: A parameter
+
+    Returns:
+        Result value
+
+    References:
+        Documentation: https://example.com/docs
+        Research paper: Author, A. (Year). Title. Journal, Volume(Issue), pages.
+    '''
+
+    with pytest.raises(ReferenceFormatError) as excinfo:
+        parse_google_docstring(docstring)
+
+    assert excinfo.value.code == "missing_dash"
+
+
+def test_parse_references_missing_colon_error_code() -> None:
+    docstring = '''Test function with invalid reference (missing colon).
+
+    Args:
+        x: A parameter
+
+    Returns:
+        Result value
+
+    Reference:
+        Documentation for library without colon
+    '''
+
+    with pytest.raises(ReferenceFormatError) as excinfo:
+        parse_google_docstring(docstring)
+
+    assert excinfo.value.code == "missing_colon"
+
+
+def test_parse_references_empty_description_error_code() -> None:
+    docstring = '''Test function with invalid reference (empty description).
+
+    Args:
+        x: A parameter
+
+    Returns:
+        Result value
+
+    Reference:
+        : https://example.com/docs
+    '''
+
+    with pytest.raises(ReferenceFormatError) as excinfo:
+        parse_google_docstring(docstring)
+
+    assert excinfo.value.code == "empty_description"
