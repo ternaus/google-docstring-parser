@@ -16,12 +16,16 @@ from typing import Any, NamedTuple
 
 import tomli
 
-from google_docstring_parser.google_docstring_parser import parse_google_docstring
+from google_docstring_parser.google_docstring_parser import (
+    ReferenceFormatError,
+    parse_google_docstring,
+)
 
 # Default configuration
 DEFAULT_CONFIG = {
     "paths": ["."],
     "require_param_types": False,
+    "check_references": True,
     "exclude_files": [],
     "verbose": False,
 }
@@ -36,6 +40,7 @@ class DocstringContext(NamedTuple):
         name (str): Name of the function or class
         verbose (bool): Whether to print verbose output
         require_param_types (bool): Whether parameter types are required
+        check_references (bool): Whether to check references for errors
     """
 
     file_path: Path
@@ -43,6 +48,7 @@ class DocstringContext(NamedTuple):
     name: str
     verbose: bool
     require_param_types: bool = False
+    check_references: bool = True
 
 
 def load_pyproject_config() -> dict[str, Any]:
@@ -72,6 +78,8 @@ def load_pyproject_config() -> dict[str, Any]:
             config["paths"] = tool_config["paths"]
         if "require_param_types" in tool_config:
             config["require_param_types"] = bool(tool_config["require_param_types"])
+        if "check_references" in tool_config:
+            config["check_references"] = bool(tool_config["check_references"])
         if "exclude_files" in tool_config:
             config["exclude_files"] = tool_config["exclude_files"]
         if "verbose" in tool_config:
@@ -136,6 +144,71 @@ def check_param_types(docstring_dict: dict[str, Any], require_types: bool) -> li
             errors.append(f"Parameter '{arg['name']}' is missing a type in docstring")
         elif "invalid type" in arg["type"].lower():
             errors.append(f"Parameter '{arg['name']}' has an invalid type in docstring: '{arg['type']}'")
+
+    return errors
+
+
+def _check_reference_fields(reference: dict, index: int) -> list[str]:
+    """Check a single reference for missing or empty fields.
+
+    Args:
+        reference (dict): The reference to check
+        index (int): The index of the reference (for error messages)
+
+    Returns:
+        List of error messages
+    """
+    errors = []
+
+    # Check required fields
+    if "description" not in reference:
+        errors.append(f"Reference #{index + 1} is missing a description")
+    elif not reference["description"]:
+        errors.append(f"Reference #{index + 1} has an empty description")
+
+    if "source" not in reference:
+        errors.append(f"Reference #{index + 1} is missing a source")
+    elif not reference["source"]:
+        errors.append(f"Reference #{index + 1} has an empty source")
+
+    return errors
+
+
+def check_references(docstring_dict: dict[str, Any]) -> list[str]:
+    """Check references section for common errors.
+
+    Args:
+        docstring_dict (dict[str, Any]): Parsed docstring dictionary
+
+    Returns:
+        List of error messages for problematic references
+    """
+    errors = []
+
+    # Check for References section
+    for ref_section in ["References", "Reference"]:
+        if ref_section in docstring_dict:
+            references = docstring_dict[ref_section]
+
+            # Check if references is a list
+            if not isinstance(references, list):
+                errors.append(f"{ref_section} section is not properly formatted")
+                return errors
+
+            # If no references, that's fine
+            if not references:
+                return errors
+
+            # Check each reference
+            for i, ref in enumerate(references):
+                if not isinstance(ref, dict):
+                    errors.append(f"Reference #{i + 1} is not properly formatted")
+                    continue
+
+                errors.extend(_check_reference_fields(ref, i))
+
+            # We've processed one references section, no need to check the other
+            break
 
     return errors
 
@@ -216,6 +289,10 @@ def _process_docstring(context: DocstringContext, docstring: str) -> list[str]:
     # Parse docstring inline
     try:
         parsed = parse_google_docstring(docstring)
+    except ReferenceFormatError as e:
+        # Catch specific reference format errors
+        errors.append(_format_error(context, f"Reference format error: {e}"))
+        return errors
     except Exception as e:
         errors.append(_format_error(context, f"Error parsing docstring: {e}"))
         return errors
@@ -228,6 +305,14 @@ def _process_docstring(context: DocstringContext, docstring: str) -> list[str]:
         except Exception as e:
             errors.append(_format_error(context, f"Error checking parameter types: {e}"))
 
+    # Check references (if enabled)
+    if context.check_references:
+        try:
+            ref_errors = check_references(parsed)
+            errors.extend(_format_error(context, err) for err in ref_errors)
+        except Exception as e:
+            errors.append(_format_error(context, f"Error checking references: {e}"))
+
     return errors
 
 
@@ -235,6 +320,7 @@ def check_file(
     file_path: Path,
     require_param_types: bool = False,
     verbose: bool = False,
+    check_references: bool = True,
 ) -> list[str]:
     """Check docstrings in a file.
 
@@ -242,6 +328,7 @@ def check_file(
         file_path (Path): Path to the Python file
         require_param_types (bool): Whether parameter types are required
         verbose (bool): Whether to print verbose output
+        check_references (bool): Whether to check references for errors
 
     Returns:
         List of error messages
@@ -267,6 +354,7 @@ def check_file(
             name=name,
             verbose=verbose,
             require_param_types=require_param_types,
+            check_references=check_references,
         )
         errors.extend(_process_docstring(context, docstring))
 
@@ -278,6 +366,7 @@ def scan_directory(
     exclude_files: list[str] | None = None,
     require_param_types: bool = False,
     verbose: bool = False,
+    check_references: bool = True,
 ) -> list[str]:
     """Scan a directory for Python files and check their docstrings.
 
@@ -286,6 +375,7 @@ def scan_directory(
         exclude_files (list[str] | None): List of filenames to exclude
         require_param_types (bool): Whether parameter types are required
         verbose (bool): Whether to print verbose output
+        check_references (bool): Whether to check references for errors
 
     Returns:
         List of error messages
@@ -308,7 +398,7 @@ def scan_directory(
                 break
 
         if not should_exclude:
-            errors.extend(check_file(py_file, require_param_types, verbose))
+            errors.extend(check_file(py_file, require_param_types, verbose, check_references))
     return errors
 
 
@@ -332,6 +422,16 @@ def _parse_args() -> argparse.Namespace:
         help="Require parameter types in docstrings",
     )
     parser.add_argument(
+        "--check-references",
+        action="store_true",
+        help="Check references for errors",
+    )
+    parser.add_argument(
+        "--no-check-references",
+        action="store_true",
+        help="Skip reference checking",
+    )
+    parser.add_argument(
         "--exclude-files",
         help="Comma-separated list of filenames to exclude",
         default="",
@@ -340,7 +440,10 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _get_config_values(args: argparse.Namespace, config: dict[str, Any]) -> tuple[list[str], bool, bool, list[str]]:
+def _get_config_values(
+    args: argparse.Namespace,
+    config: dict[str, Any],
+) -> tuple[list[str], bool, bool, bool, list[str]]:
     """Get configuration values from command line args and config.
 
     Args:
@@ -348,7 +451,7 @@ def _get_config_values(args: argparse.Namespace, config: dict[str, Any]) -> tupl
         config (dict[str, Any]): Configuration from pyproject.toml
 
     Returns:
-        Tuple of (paths, require_param_types, verbose, exclude_files)
+        Tuple of (paths, require_param_types, verbose, check_references, exclude_files)
     """
     # Get paths
     paths = args.paths or config["paths"]
@@ -359,6 +462,13 @@ def _get_config_values(args: argparse.Namespace, config: dict[str, Any]) -> tupl
     # Get verbose
     verbose = args.verbose or config["verbose"]
 
+    # Get check_references - handle both positive and negative flags
+    check_references = config["check_references"]
+    if args.check_references:
+        check_references = True
+    if args.no_check_references:
+        check_references = False
+
     # Get exclude_files
     exclude_files = []
     if args.exclude_files:
@@ -368,7 +478,7 @@ def _get_config_values(args: argparse.Namespace, config: dict[str, Any]) -> tupl
     if not exclude_files:
         exclude_files = config["exclude_files"]
 
-    return paths, require_param_types, verbose, exclude_files
+    return paths, require_param_types, verbose, check_references, exclude_files
 
 
 def _process_paths(
@@ -376,6 +486,7 @@ def _process_paths(
     exclude_files: list[str],
     require_param_types: bool,
     verbose: bool,
+    check_references: bool,
 ) -> list[str]:
     """Process paths and collect errors.
 
@@ -384,6 +495,7 @@ def _process_paths(
         exclude_files (list[str]): List of files to exclude
         require_param_types (bool): Whether to require parameter types
         verbose (bool): Whether to print verbose output
+        check_references (bool): Whether to check references for errors
 
     Returns:
         List of error messages
@@ -392,10 +504,10 @@ def _process_paths(
     for path_str in paths:
         path = Path(path_str)
         if path.is_dir():
-            errors = scan_directory(path, exclude_files, require_param_types, verbose)
+            errors = scan_directory(path, exclude_files, require_param_types, verbose, check_references)
             all_errors.extend(errors)
         elif path.is_file() and path.suffix == ".py":
-            errors = check_file(path, require_param_types, verbose)
+            errors = check_file(path, require_param_types, verbose, check_references)
             all_errors.extend(errors)
         else:
             print(f"Error: {path} is not a directory or Python file")
@@ -411,13 +523,14 @@ def main():
     args = _parse_args()
 
     # Get configuration values
-    paths, require_param_types, verbose, exclude_files = _get_config_values(args, config)
+    paths, require_param_types, verbose, check_references, exclude_files = _get_config_values(args, config)
 
     # Print configuration if verbose
     if verbose:
         print("Configuration:")
         print(f"  Paths: {paths}")
         print(f"  Require parameter types: {require_param_types}")
+        print(f"  Check references: {check_references}")
         print(f"  Exclude files: {exclude_files}")
 
     if all_errors := _process_paths(
@@ -425,6 +538,7 @@ def main():
         exclude_files,
         require_param_types,
         verbose,
+        check_references,
     ):
         for error in all_errors:
             print(error)
