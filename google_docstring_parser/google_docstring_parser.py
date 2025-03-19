@@ -265,7 +265,7 @@ def _process_args_section(args: list[dict[str, str | None]], sections: dict[str,
 
     # Validate type annotations and check for bare nested collections
     for arg in args:
-        if arg["type"] and validate_types:
+        if arg["type"]:
             validate_type_annotation(arg["type"])
 
             # Check for nested types - if this is a complex type like Dict[str, List],
