@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from google_docstring_parser import parse_google_docstring
-from google_docstring_parser.google_docstring_parser import InvalidTypeAnnotationError
+from google_docstring_parser.type_validation import InvalidTypeAnnotationError
 
 
 def test_invalid_nested_types() -> None:

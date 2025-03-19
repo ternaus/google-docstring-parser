@@ -3,9 +3,9 @@ from __future__ import annotations
 import pytest
 
 from google_docstring_parser import parse_google_docstring
-from google_docstring_parser.google_docstring_parser import (
+from google_docstring_parser.type_validation import (
     InvalidTypeAnnotationError,
-    _validate_type_annotation,
+    validate_type_annotation,
 )
 
 
@@ -58,12 +58,12 @@ from google_docstring_parser.google_docstring_parser import (
     ],
 )
 def test_validate_type_annotation(type_name: str, should_raise: bool) -> None:
-    """Test the _validate_type_annotation function with various type annotations."""
+    """Test the validate_type_annotation function with various type annotations."""
     if should_raise:
         with pytest.raises(InvalidTypeAnnotationError):
-            _validate_type_annotation(type_name)
+            validate_type_annotation(type_name)
     else:
-        assert _validate_type_annotation(type_name) is True
+        assert validate_type_annotation(type_name) is True
 
 
 @pytest.mark.parametrize(
@@ -175,7 +175,7 @@ def test_error_message_content() -> None:
     """Test that the error message contains useful information."""
     collection_type = "List"
     with pytest.raises(InvalidTypeAnnotationError) as excinfo:
-        _validate_type_annotation(collection_type)
+        validate_type_annotation(collection_type)
 
     # Check that the error message contains the type name and a suggestion
     error_message = str(excinfo.value)
@@ -195,4 +195,4 @@ def test_complex_nested_types() -> None:
 
     for type_name in complex_types:
         # These should all be valid - they have their element types
-        assert _validate_type_annotation(type_name) is True
+        assert validate_type_annotation(type_name) is True
