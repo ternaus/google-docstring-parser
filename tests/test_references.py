@@ -59,6 +59,11 @@ def test_parse_references_single_line() -> None:
 
 
 def test_parse_references_single_with_dash_error() -> None:
+    """Test function with a single reference with dash.
+
+    This test verifies that a single reference (Reference: section) cannot use
+    a dash prefix, as dashes are only for multiple references.
+    """
     docstring = '''Test function with a single reference with dash.
 
     Args:
@@ -76,6 +81,10 @@ def test_parse_references_single_with_dash_error() -> None:
 
 
 def test_parse_references_multiple_lines() -> None:
+    """Test that multiple main references without dashes should raise an error.
+
+    Each separate reference (not continuation lines) should start with a dash.
+    """
     docstring = '''Test function with multiple references without dashes.
 
     Args:
@@ -111,6 +120,11 @@ def test_parse_references_no_references() -> None:
 
 
 def test_parse_references_missing_dash() -> None:
+    """Test error raised when some references don't start with dashes.
+
+    When there are multiple references, all main references should start with dashes,
+    even when some references have multi-line descriptions.
+    """
     docstring = '''Test function with invalid references (missing dash).
 
     Args:
@@ -293,3 +307,97 @@ def test_parse_references_empty_description_error_code() -> None:
         parse_google_docstring(docstring)
 
     assert excinfo.value.code == "empty_description"
+
+
+def test_parse_references_with_multiline_description() -> None:
+    """Test parsing references with multi-line descriptions based on indentation."""
+    docstring = '''Test function with references including a multi-line reference.
+
+    Args:
+        x: A parameter
+
+    Returns:
+        Result value
+
+    References:
+        - Bleach method: https://github.com/UjjwalSaxena/Automold--Road-Augmentation-Library
+        - Texture method: Inspired by computer graphics techniques for snow rendering
+           and atmospheric scattering simulations.
+    '''
+
+    result = parse_google_docstring(docstring)
+
+    assert 'References' in result
+    references = result['References']
+    assert len(references) == 2
+
+    assert references[0]['description'] == 'Bleach method'
+    assert references[0]['source'] == 'https://github.com/UjjwalSaxena/Automold--Road-Augmentation-Library'
+
+    assert references[1]['description'] == 'Texture method'
+    assert references[1]['source'] == 'Inspired by computer graphics techniques for snow rendering and atmospheric scattering simulations.'
+
+
+def test_parse_references_with_two_multiline_descriptions() -> None:
+    """Test parsing references where multiple references have multi-line descriptions."""
+    docstring = '''Test function with references where all have multi-line descriptions.
+
+    Args:
+        x: A parameter
+
+    Returns:
+        Result value
+
+    References:
+        - First reference: This is a description that spans
+          multiple lines with consistent indentation.
+        - Second reference: Another description with
+          multiple lines and
+          even more text.
+    '''
+
+    result = parse_google_docstring(docstring)
+
+    assert 'References' in result
+    references = result['References']
+    assert len(references) == 2
+
+    assert references[0]['description'] == 'First reference'
+    assert references[0]['source'] == 'This is a description that spans multiple lines with consistent indentation.'
+
+    assert references[1]['description'] == 'Second reference'
+    assert references[1]['source'] == 'Another description with multiple lines and even more text.'
+
+
+def test_parse_references_mixed_formatting() -> None:
+    """Test parsing references with a mix of single-line and multi-line descriptions."""
+    docstring = '''Test function with mixed reference formatting.
+
+    Args:
+        x: A parameter
+
+    Returns:
+        Result value
+
+    References:
+        - Simple reference: https://example.com/docs
+        - Complex reference: This is a description that spans
+          multiple lines and contains technical details
+          about the implementation.
+        - Another simple one: Just a short note.
+    '''
+
+    result = parse_google_docstring(docstring)
+
+    assert 'References' in result
+    references = result['References']
+    assert len(references) == 3
+
+    assert references[0]['description'] == 'Simple reference'
+    assert references[0]['source'] == 'https://example.com/docs'
+
+    assert references[1]['description'] == 'Complex reference'
+    assert references[1]['source'] == 'This is a description that spans multiple lines and contains technical details about the implementation.'
+
+    assert references[2]['description'] == 'Another simple one'
+    assert references[2]['source'] == 'Just a short note.'
