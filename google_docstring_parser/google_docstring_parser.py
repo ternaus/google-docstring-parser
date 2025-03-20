@@ -23,7 +23,17 @@ from typing import Any
 
 from docstring_parser import parse
 
-__all__ = ["ReferenceFormatError", "parse_google_docstring"]
+from google_docstring_parser.type_validation import (
+    InvalidTypeAnnotationError,
+    check_text_for_bare_collections,
+    validate_type_annotation,
+)
+
+__all__ = [
+    "InvalidTypeAnnotationError",
+    "ReferenceFormatError",
+    "parse_google_docstring",
+]
 
 
 class ReferenceFormatError(ValueError):
@@ -229,11 +239,79 @@ def _parse_references(reference_content: str) -> list[dict[str, str]]:
     return references
 
 
-def parse_google_docstring(docstring: str) -> dict[str, Any]:
+def _process_args_section(args: list[dict[str, str | None]], sections: dict[str, str], *, validate_types: bool) -> None:
+    """Process and validate the Args section of a docstring.
+
+    Args:
+        args (list[dict[str, str | None]]): A list of dictionaries containing information about the arguments.
+        sections (dict[str, str]): A dictionary mapping section names to their content.
+        validate_types (bool): Whether to validate type annotations.
+
+    Raises:
+        InvalidTypeAnnotationError: If a type annotation is invalid.
+    """
+    if not validate_types:
+        return
+
+    # Check the entire Args section text for potential bare collections
+    # This catches issues like "Dict[str, List]" that might not be caught by individual parameter validation
+    check_text_for_bare_collections(sections["Args"])
+
+    # Validate type annotations and check for bare nested collections
+    for arg in args:
+        if arg["type"] and validate_types:
+            validate_type_annotation(arg["type"])
+
+            # Check for nested types - if this is a complex type like Dict[str, List],
+            # the bare 'List' would be caught here
+            if "[" in arg["type"] and "]" in arg["type"]:
+                check_text_for_bare_collections(arg["type"])
+
+
+def _process_returns_section(sections: dict[str, str], *, validate_types: bool) -> list[dict[str, str]]:
+    """Process and validate the Returns section of a docstring.
+
+    Args:
+        sections (dict[str, str]): A dictionary mapping section names to their content.
+        validate_types (bool): Whether to validate type annotations.
+
+    Returns:
+        list[dict[str, str]]: A list of dictionaries containing information about the return values.
+
+    Raises:
+        InvalidTypeAnnotationError: If a type annotation is invalid.
+    """
+    if (
+        "Returns" not in sections
+        or not (returns_lines := sections["Returns"].split("\n"))
+        or not (return_match := re.match(r"^(?:(\w+):\s*)?(.*)$", returns_lines[0].strip()))
+        or not (return_desc := return_match[2])
+    ):
+        return []
+
+    return_type = return_match[1]
+
+    # Check the entire Returns section text for potential bare collections
+    if validate_types:
+        check_text_for_bare_collections(sections["Returns"])
+
+    if return_type and validate_types:
+        # Validate the return type
+        validate_type_annotation(return_type)
+
+        # Check for nested types in return type
+        if "[" in return_type and "]" in return_type:
+            check_text_for_bare_collections(return_type)
+
+    return [{"type": return_type, "description": return_desc.rstrip()}]
+
+
+def parse_google_docstring(docstring: str, *, validate_types: bool = True) -> dict[str, Any]:
     """Parse a Google-style docstring into a structured dictionary.
 
     Args:
         docstring (str): The docstring to parse
+        validate_types (bool): Whether to validate type annotations. Default is True.
 
     Returns:
         A dictionary with parsed docstring sections
@@ -266,18 +344,11 @@ def parse_google_docstring(docstring: str) -> dict[str, Any]:
             for arg in parsed.params
         ]
     ):
+        _process_args_section(args, sections, validate_types=validate_types)
         result["Args"] = args
 
     # Process returns
-    if (
-        "Returns" in sections
-        and (returns_lines := sections["Returns"].split("\n"))
-        and (return_match := re.match(r"^(?:(\w+):\s*)?(.*)$", returns_lines[0].strip()))
-        and (return_desc := return_match[2])
-    ):
-        result["Returns"] = [{"type": return_match[1], "description": return_desc.rstrip()}]
-    else:
-        result["Returns"] = []
+    result["Returns"] = _process_returns_section(sections, validate_types=validate_types)
 
     # Process references section
     for ref_section in ["References", "Reference"]:
