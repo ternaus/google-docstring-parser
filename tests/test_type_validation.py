@@ -39,6 +39,8 @@ from google_docstring_parser.type_validation import (
         ("CustomType", False),
         ("module.CustomType", False),
         ('Literal["option1", "option2"]', False),
+        ('Literal[1, 2, 3]', False),
+        ('Literal["success", True, None]', False),
 
         # Invalid type annotations (bare collection types)
         ("List", True),
@@ -55,6 +57,8 @@ from google_docstring_parser.type_validation import (
         ("Iterator", True),
         ("Generator", True),
         ("Sequence", True),
+        ("Literal", True),
+        ("literal", True),
     ],
 )
 def test_validate_type_annotation(type_name: str, should_raise: bool) -> None:
@@ -63,7 +67,8 @@ def test_validate_type_annotation(type_name: str, should_raise: bool) -> None:
         with pytest.raises(InvalidTypeAnnotationError):
             validate_type_annotation(type_name)
     else:
-        assert validate_type_annotation(type_name) is True
+        # Should not raise any exception
+        validate_type_annotation(type_name)
 
 
 @pytest.mark.parametrize(
@@ -101,6 +106,15 @@ def test_validate_type_annotation(type_name: str, should_raise: bool) -> None:
         (
             """Description.
 
+            Args:
+                param1 (Literal["option1", "option2"]): Description of param1
+                param2 (Literal[1, 2, 3]): Description of param2
+            """,
+            False,
+        ),
+        (
+            """Description.
+
             Returns:
                 str: A string value
             """,
@@ -111,6 +125,14 @@ def test_validate_type_annotation(type_name: str, should_raise: bool) -> None:
 
             Returns:
                 List[int]: A list of integers
+            """,
+            False,
+        ),
+        (
+            """Description.
+
+            Returns:
+                Literal["success", "error"]: A status code
             """,
             False,
         ),
@@ -159,6 +181,14 @@ def test_validate_type_annotation(type_name: str, should_raise: bool) -> None:
             """,
             True,
         ),
+        (
+            """Description.
+
+            Args:
+                param1 (Literal): Invalid type - missing literal values
+            """,
+            True,
+        ),
     ],
 )
 def test_parse_google_docstring_type_validation(docstring: str, should_raise: bool) -> None:
@@ -195,4 +225,5 @@ def test_complex_nested_types() -> None:
 
     for type_name in complex_types:
         # These should all be valid - they have their element types
-        assert validate_type_annotation(type_name) is True
+        # Should not raise any exception
+        validate_type_annotation(type_name)

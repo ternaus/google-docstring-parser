@@ -25,7 +25,7 @@ from docstring_parser import parse
 
 from google_docstring_parser.type_validation import (
     InvalidTypeAnnotationError,
-    check_for_bare_nested_collections,
+    check_text_for_bare_collections,
     validate_type_annotation,
 )
 
@@ -253,25 +253,19 @@ def _process_args_section(args: list[dict[str, str | None]], sections: dict[str,
     if not validate_types:
         return
 
-    # Special direct check for the test cases with bare nested collections
-    args_section = sections["Args"]
-    if any(x in args_section for x in ["Dict[str, List]", "List[Dict]", "Tuple[int, List]"]):
-        for collection in ["Dict", "List", "Tuple", "dict", "list", "tuple"]:
-            if collection in args_section and f"{collection}[" not in args_section:
-                raise InvalidTypeAnnotationError(
-                    collection,
-                    f"Nested collection type '{collection}' must include element types",
-                )
+    # Check the entire Args section text for potential bare collections
+    # This catches issues like "Dict[str, List]" that might not be caught by individual parameter validation
+    check_text_for_bare_collections(sections["Args"])
 
     # Validate type annotations and check for bare nested collections
     for arg in args:
-        if arg["type"]:
+        if arg["type"] and validate_types:
             validate_type_annotation(arg["type"])
 
             # Check for nested types - if this is a complex type like Dict[str, List],
             # the bare 'List' would be caught here
             if "[" in arg["type"] and "]" in arg["type"]:
-                check_for_bare_nested_collections(arg["type"])
+                check_text_for_bare_collections(arg["type"])
 
 
 def _process_returns_section(sections: dict[str, str], *, validate_types: bool) -> list[dict[str, str]]:
@@ -297,14 +291,9 @@ def _process_returns_section(sections: dict[str, str], *, validate_types: bool) 
 
     return_type = return_match[1]
 
-    # Special direct check for test case with bare nested collections in return
+    # Check the entire Returns section text for potential bare collections
     if validate_types:
-        returns_section = sections["Returns"]
-        if "Tuple[int, Dict]" in returns_section:
-            raise InvalidTypeAnnotationError(
-                "Dict",
-                "Nested collection type 'Dict' must include element types",
-            )
+        check_text_for_bare_collections(sections["Returns"])
 
     if return_type and validate_types:
         # Validate the return type
@@ -312,7 +301,7 @@ def _process_returns_section(sections: dict[str, str], *, validate_types: bool) 
 
         # Check for nested types in return type
         if "[" in return_type and "]" in return_type:
-            check_for_bare_nested_collections(return_type)
+            check_text_for_bare_collections(return_type)
 
     return [{"type": return_type, "description": return_desc.rstrip()}]
 

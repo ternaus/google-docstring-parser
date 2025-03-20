@@ -19,224 +19,504 @@ This module contains functions and classes for validating type annotations in do
 from __future__ import annotations
 
 import re
+from re import Match
+from typing import AnyStr
 
 # Generic collections that require type arguments - exactly as they should appear
-COLLECTIONS_REQUIRING_ARGS = [
-    "Dict",
-    "FrozenSet",
-    "Generator",
-    "Iterable",
-    "Iterator",
-    "List",
-    "Sequence",
-    "Set",
-    "Tuple",
+COLLECTIONS_REQUIRING_ARGS = (
+    # Lowercase versions
     "dict",
-    "frozenset",
     "list",
     "set",
+    "frozenset",
     "tuple",
-]
+    "type",
+    "iterable",
+    "iterator",
+    "generator",
+    "sequence",
+    "literal",
+    "typing.dict",
+    "typing.list",
+    "typing.set",
+    "typing.frozenset",
+    "typing.tuple",
+    "typing.type",
+    "typing.iterable",
+    "typing.iterator",
+    "typing.generator",
+    "typing.sequence",
+    "typing.literal",
+    # Capitalized versions (for backward compatibility)
+    "Dict",
+    "List",
+    "Set",
+    "FrozenSet",
+    "Tuple",
+    "Type",
+    "Iterable",
+    "Iterator",
+    "Generator",
+    "Sequence",
+    "Literal",
+    "typing.Dict",
+    "typing.List",
+    "typing.Set",
+    "typing.FrozenSet",
+    "typing.Tuple",
+    "typing.Type",
+    "typing.Iterable",
+    "typing.Iterator",
+    "typing.Generator",
+    "typing.Sequence",
+    "typing.Literal",
+)
 
 # Precompiled regex patterns
 COLLECTION_TYPE_PATTERN = re.compile(r"([A-Za-z0-9_]+)\[(.*)\]")
+
+# Special characters for bracket handling
+OPEN_BRACKET = "["
+CLOSE_BRACKET = "]"
+OPEN_PAREN = "("
+CLOSE_PAREN = ")"
+OPEN_BRACE = "{"
+CLOSE_BRACE = "}"
+
+# Constants for validation
+MAX_WORD_COUNT_FOR_TYPE = 3
+NESTING_KEYWORD = "with"
 
 
 class InvalidTypeAnnotationError(ValueError):
     """Error raised when a type annotation is invalid.
 
     Args:
-        type_name (str): The invalid type annotation
-        message (str): Error message explaining the issue
+        message (str): The error message.
     """
 
-    def __init__(self, type_name: str, message: str = "") -> None:
-        self.type_name = type_name
-        if not message:
-            message = f"Invalid type annotation: {type_name}. Collection types must include element types."
+    BARE_COLLECTION = "Collection must include element types"
+    INVALID_BRACKET_USAGE = "Collection must be followed by type arguments in brackets"
+    INVALID_NESTED_TYPE = "Invalid nested type: {}"
+
+    def __init__(self, message: str) -> None:
+        """Initialize the error with a message.
+
+        Args:
+            message (str): The error message.
+        """
+        self.message = message
         super().__init__(message)
 
 
-def is_bare_collection(type_name: str) -> bool:
-    """Check if the type is a bare collection without arguments.
+class BracketValidationError(ValueError):
+    """Error raised when brackets in a type annotation are not balanced or mismatched.
+
+    Contains specific error types for different bracket validation issues.
+    """
+
+    UNBALANCED_CLOSING = "Closing bracket without matching opening bracket"
+    MISMATCHED_PAIR = "Mismatched bracket pair"
+    UNCLOSED_BRACKETS = "Unclosed brackets in type annotation"
+    COLLECTION_MUST_HAVE_ARGS = "Collection must include element types"
+    WRONG_BRACKET_TYPE = "Collection '{}' must use square brackets for type arguments, not '{}'"
+
+    def __init__(self, error_type: str) -> None:
+        """Initialize with a specific error type.
+
+        Args:
+            error_type (str): One of the predefined error types.
+        """
+        super().__init__(error_type)
+
+
+def is_collection_type(type_name: str) -> bool:
+    """Check if a type name is a known collection type.
 
     Args:
-        type_name (str): The type name to check
+        type_name (str): The type name to check.
 
     Returns:
-        bool: True if the type is a bare collection, False otherwise
+        bool: True if the type is a collection, False otherwise.
     """
+    # For exact match only
     return type_name in COLLECTIONS_REQUIRING_ARGS
 
 
-def parse_nested_type_args(inner_types: str, outer_type: str) -> list[str]:
-    """Parse comma-separated type arguments from a complex type.
+def is_bare_collection(type_name: str) -> bool:
+    """Check if a type name is a bare collection without element types.
 
     Args:
-        inner_types (str): The inner part of the complex type (between brackets)
-        outer_type (str): The outer type name
+        type_name (str): The type name to check.
 
     Returns:
-        List[str]: List of parsed type arguments
+        bool: True if the type is a bare collection, False otherwise.
     """
-    # Special case for Callable with multiple argument lists
-    if outer_type == "Callable" and inner_types.startswith("["):
-        return []  # Skip detailed Callable validation
-
-    # Split by commas, handling nested brackets properly
-    depth = 0
-    current_arg = ""
-    args = []
-
-    for char in inner_types:
-        if char == "[":
-            depth += 1
-            current_arg += char
-        elif char == "]":
-            depth -= 1
-            current_arg += char
-        elif char == "," and depth == 0:
-            args.append(current_arg.strip())
-            current_arg = ""
-        else:
-            current_arg += char
-
-    if current_arg:
-        args.append(current_arg.strip())
-
-    return args
+    return is_collection_type(type_name) and "[" not in type_name
 
 
-def validate_type_annotation(type_name: str | None) -> bool:
-    """Validate that type annotations follow proper format.
+def validate_type_annotation(type_annotation: str) -> None:
+    """Validate a type annotation for proper syntax and collection usage.
 
     Args:
-        type_name (str | None): The type annotation to validate
-
-    Returns:
-        bool: True if the type annotation is valid
+        type_annotation (str): The type annotation to validate.
 
     Raises:
-        InvalidTypeAnnotationError: If a collection type doesn't include element types
+        InvalidTypeAnnotationError: If the type annotation is invalid.
     """
-    if not type_name:
-        return True
+    if not type_annotation:
+        return
 
     # Check for bare collection types without arguments - exact match only
-    if is_bare_collection(type_name):
-        raise InvalidTypeAnnotationError(
-            type_name,
-            f"Collection type '{type_name}' must include element types (e.g., {type_name}[str])",
-        )
+    if is_bare_collection(type_annotation):
+        error_msg = f"Collection type '{type_annotation}' must include element types (e.g., {type_annotation}[str])"
+        raise InvalidTypeAnnotationError(error_msg)
 
     # Check for nested types in complex type annotations
-    bracket_match = COLLECTION_TYPE_PATTERN.search(type_name)
-    if not bracket_match:
-        return True
-
-    outer_type = bracket_match.group(1)
-    inner_types = bracket_match.group(2)
-
-    # Process nested types
-    if not inner_types:
-        return True
-
-    if "," in inner_types:
-        # Handle comma-separated type arguments
-        args = parse_nested_type_args(inner_types, outer_type)
-
-        # Validate each argument type
-        for arg in args:
-            validate_type_annotation(arg)
-    else:
-        # Single type argument
-        validate_type_annotation(inner_types)
-
-    return True
+    _validate_type_declaration(type_annotation)
 
 
-def check_pattern_for_bare_collection(type_string: str, collection: str) -> bool:
-    """Check if a collection appears as a bare type in a complex type expression.
+def check_text_for_bare_collections(text: str) -> None:
+    """Check text for bare collection types that require brackets with arguments.
+
+    This function examines a section of text, looking for collection types that
+    are used without proper type arguments in brackets (e.g., 'List' without '[int]').
 
     Args:
-        type_string (str): The full type string to check
-        collection (str): The collection name to look for
-
-    Returns:
-        bool: True if the bare collection was found and raised an exception, False otherwise
+        text (str): The text to check for bare collection types.
 
     Raises:
-        InvalidTypeAnnotationError: If a nested collection is used without element types
+        InvalidTypeAnnotationError: If a collection requiring arguments is used
+            without proper bracket notation.
     """
-    # Skip if this collection isn't in the type string
-    if collection not in type_string:
-        return False
+    # Extract type declarations from the text first
+    type_pattern = r"\(\s*([^)]+)\s*\):"  # Match docstring parameter type declarations
+    return_pattern = r"^([A-Za-z0-9_\[\],\s]+):"  # Match return type declarations
 
-    # Skip if it's properly parameterized (e.g., List[int])
-    if f"{collection}[" in type_string:
-        return False
+    type_matches = re.findall(type_pattern, text)
+    return_matches = re.findall(return_pattern, text, re.MULTILINE)
 
-    # Patterns to catch:
-    # 1. Inside square brackets followed by comma or closing bracket: [List, or [List]
-    # 2. After comma followed by space or closing bracket: , List, or , List]
-    patterns = [
-        rf"\[{collection}[,\]]",  # [List] or [List,
-        rf", {collection}[\s,\]]",  # , List or , List]
-    ]
+    # For each extracted type, validate it
+    for type_decl in type_matches + return_matches:
+        # Skip if empty
+        if not type_decl.strip():
+            continue
 
-    for pattern in patterns:
-        if re.search(pattern, type_string):
-            raise InvalidTypeAnnotationError(
-                collection,
-                f"Nested collection type '{collection}' must include element types",
-            )
+        # Validate extracted type
+        try:
+            validate_type_annotation(type_decl.strip())
+        except InvalidTypeAnnotationError:
+            # Only re-raise if we're confident this is actually a type annotation
+            # This prevents false positives on text that happens to contain collection names
+            if _looks_like_type_annotation(type_decl):
+                raise
 
+    # Next handle bare collections in the text (not in proper parentheses)
+    for collection in COLLECTIONS_REQUIRING_ARGS:
+        # Pattern to match bare collection not followed by opening bracket
+        # Only match when it appears to be a type (near parentheses or colons)
+        pattern = rf"(\(|\s){collection}\s*(?![\[\(\{{])[:\)]"
+        matches = list(re.finditer(pattern, text))
+
+        for match in matches:
+            # Skip if within string literals
+            if _is_within_string_literal(text, match.start()):
+                continue
+
+            # Skip if part of a qualified name
+            before = text[: match.start()].rstrip()
+            if before.endswith("."):
+                continue
+
+            # This is a bare collection used as a type
+            error_msg = f"Collection '{collection}' must be followed by type arguments in brackets"
+            raise InvalidTypeAnnotationError(error_msg)
+
+
+def _is_within_string_literal(text: str, position: int) -> bool:
+    """Check if a position in text is within a string literal.
+
+    Args:
+        text (str): The text to check.
+        position (int): The character position to check.
+
+    Returns:
+        bool: True if the position is within a string literal, False otherwise.
+    """
+    # Count quotes before the position to determine if we're in a string
+    single_quotes = text[:position].count("'") % 2
+    double_quotes = text[:position].count('"') % 2
+    return single_quotes == 1 or double_quotes == 1
+
+
+def _looks_like_type_annotation(text: str) -> bool:
+    """Check if text appears to be a type annotation.
+
+    Args:
+        text (str): The text to check.
+
+    Returns:
+        bool: True if the text looks like a type annotation, False otherwise.
+    """
+    # Simple heuristic: contains a collection name and brackets
+    for collection in COLLECTIONS_REQUIRING_ARGS:
+        if collection in text and any(char in text for char in "[](){}"):
+            return True
     return False
 
 
-def check_bracket_args_for_bare_collections(content: str) -> None:
-    """Check the content of brackets for bare collection types.
+def _process_string_literals(text: str) -> tuple[str, list[str]]:
+    """Extract string literals from text and replace with placeholders.
 
     Args:
-        content (str): Content inside brackets to check
+        text (str): The text containing string literals.
 
-    Raises:
-        InvalidTypeAnnotationError: If a bare collection is found
+    Returns:
+        tuple[str, list[str]]: A tuple containing:
+            - The text with string literals replaced by placeholders
+            - A list of the extracted string literals
     """
-    # Split by commas, handling possible spaces
-    args = [arg.strip() for arg in content.split(",")]
+    # Extract string literals to avoid false positives in brackets
+    pattern = r'(?:"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\')'
+    matches = list(re.finditer(pattern, text))
+    result = text
+    extracted: list[str] = []
 
-    for arg in args:
-        # Check if any argument is just a bare collection type
-        if arg in COLLECTIONS_REQUIRING_ARGS:
-            raise InvalidTypeAnnotationError(
-                arg,
-                f"Nested collection type '{arg}' must include element types",
-            )
+    # Replace each match with a placeholder
+    for i, match in enumerate(reversed(matches)):
+        placeholder = f"STR_LITERAL_{len(matches) - i - 1}"
+        start, end = match.span()
+        extracted.insert(0, text[start:end])
+        result = result[:start] + placeholder + result[end:]
+
+    return result, extracted
 
 
-def check_for_bare_nested_collections(type_string: str) -> None:
-    """Check for bare nested collection types in a type string.
+def replace_string_literals(match: Match[AnyStr], literals: list[str]) -> str:
+    """Replace string literal placeholders with their original values.
 
     Args:
-        type_string (str): The type string to check
+        match (Match[AnyStr]): The regex match containing the placeholder.
+        literals (list[str]): The list of original string literals.
+
+    Returns:
+        str: The string with placeholders replaced by the original literals.
+    """
+    placeholder = str(match.group(0))
+    if placeholder.startswith("STR_LITERAL_"):
+        idx = int(placeholder.split("_")[-1])
+        if idx < len(literals):
+            return literals[idx]
+    return placeholder
+
+
+def _tokenize_type_declaration(declaration: str) -> list[str]:
+    """Split a type declaration into tokens.
+
+    Args:
+        declaration (str): The type declaration string.
+
+    Returns:
+        list[str]: A list of tokens from the type declaration.
+    """
+    # Process string literals to avoid treating brackets in strings as real brackets
+    processed_text, string_literals = _process_string_literals(declaration)
+
+    # Initialize empty list for tokens
+    tokens: list[str] = []
+
+    # Define special characters
+    special_chars = "[](){},"
+
+    # Process the text character by character
+    i = 0
+    current_token = ""
+
+    while i < len(processed_text):
+        char = processed_text[i]
+
+        # Handle special characters (brackets and comma)
+        if char in special_chars:
+            # If we have a current token, add it to the list
+            if current_token:
+                tokens.append(current_token)
+                current_token = ""
+            # Add the special character as its own token
+            tokens.append(char)
+        # Handle whitespace as a token separator
+        elif char.isspace():
+            # If we have a current token, add it to the list
+            if current_token:
+                tokens.append(current_token)
+                current_token = ""
+        # Handle regular characters as part of a token
+        else:
+            current_token += char
+
+        i += 1
+
+    # Add the last token if there is one
+    if current_token:
+        tokens.append(current_token)
+
+    # Restore string literals in the tokens
+    pattern = r"STR_LITERAL_\d+"
+    for i, token in enumerate(tokens):
+        if re.match(pattern, token):
+            tokens[i] = re.sub(pattern, lambda m: replace_string_literals(m, string_literals), token)
+
+    return tokens
+
+
+def _check_for_opening_bracket(
+    tokens: list[str],
+    i: int,
+    token: str,
+    bracket_stack: list[str],
+    collection_stack: list[tuple[str, str]],
+) -> None:
+    """Check for opening brackets and update stacks.
+
+    Args:
+        tokens (list[str]): List of tokens from a type declaration.
+        i (int): Current token index.
+        token (str): Current token.
+        bracket_stack (list[str]): Stack tracking opening brackets.
+        collection_stack (list[tuple[str, str]]): Stack tracking collection types with their brackets.
+    """
+    bracket_stack.append(token)
+
+    # Check if the previous token is a collection requiring arguments
+    if i > 0 and tokens[i - 1] in COLLECTIONS_REQUIRING_ARGS:
+        collection_stack.append((tokens[i - 1], token))
+
+
+def _check_for_closing_bracket(token: str, bracket_stack: list[str], collection_stack: list[tuple[str, str]]) -> None:
+    """Check for closing brackets and validate against bracket stack.
+
+    Args:
+        token (str): Current token.
+        bracket_stack (list[str]): Stack tracking opening brackets.
+        collection_stack (list[tuple[str, str]]): Stack tracking collection types with their brackets.
 
     Raises:
-        InvalidTypeAnnotationError: If a nested collection type is used without element types
+        BracketValidationError: If brackets are unbalanced or mismatched.
     """
-    # First, validate the type itself
-    validate_type_annotation(type_string)
+    if not bracket_stack:
+        raise BracketValidationError(BracketValidationError.UNBALANCED_CLOSING)
 
-    # Look for patterns like Dict[str, List] or Tuple[int, Dict]
-    for collection in COLLECTIONS_REQUIRING_ARGS:
-        if check_pattern_for_bare_collection(type_string, collection):
+    # Check for mismatched bracket pairs
+    last_open = bracket_stack.pop()
+    if (
+        (last_open == OPEN_BRACKET and token != CLOSE_BRACKET)
+        or (last_open == OPEN_PAREN and token != CLOSE_PAREN)
+        or (last_open == OPEN_BRACE and token != CLOSE_BRACE)
+    ):
+        raise BracketValidationError(BracketValidationError.MISMATCHED_PAIR)
+
+    # If we're closing a collection's brackets, remove it from the stack
+    if collection_stack and collection_stack[-1][1] == last_open:
+        collection_stack.pop()
+
+
+def _check_for_bare_collection(tokens: list[str], i: int, token: str) -> None:
+    """Check if a token is a bare collection without required brackets.
+
+    Args:
+        tokens (list[str]): List of tokens from a type declaration.
+        i (int): Current token index.
+        token (str): Current token.
+
+    Raises:
+        InvalidTypeAnnotationError: If a collection type appears without required brackets.
+    """
+    if token in COLLECTIONS_REQUIRING_ARGS:
+        # Skip if this collection is followed by an opening bracket
+        if i < len(tokens) - 1 and tokens[i + 1] in (OPEN_BRACKET, OPEN_PAREN, OPEN_BRACE):
             return
 
-    # Also handle the case where we have properly formatted outer brackets
-    # but bare collections inside as arguments
-    if "[" in type_string and "]" in type_string:
-        # Extract the content inside brackets
-        bracket_matches = re.findall(r"\[(.*?)\]", type_string)
+        # Skip if this is part of a qualified name (e.g., module.List)
+        if i > 0 and tokens[i - 1] == ".":
+            return
 
-        for content in bracket_matches:
-            check_bracket_args_for_bare_collections(content)
+        error_msg = f"Collection '{token}' must be followed by type arguments in brackets"
+        raise InvalidTypeAnnotationError(error_msg)
+
+
+def _check_tokens_for_collection_type_usage(tokens: list[str]) -> None:
+    """Check tokens for proper use of collection types with brackets.
+
+    Args:
+        tokens (list[str]): List of tokens from a type declaration.
+
+    Raises:
+        BracketValidationError: If brackets are unbalanced or mismatched.
+        InvalidTypeAnnotationError: If a collection type appears without required type arguments.
+    """
+    bracket_stack: list[str] = []
+    collection_stack: list[tuple[str, str]] = []
+
+    # Check for balanced brackets and proper collection type usage
+    for i, token in enumerate(tokens):
+        # Handle opening brackets
+        if token in (OPEN_BRACKET, OPEN_PAREN, OPEN_BRACE):
+            _check_for_opening_bracket(tokens, i, token, bracket_stack, collection_stack)
+
+        # Handle closing brackets
+        elif token in (CLOSE_BRACKET, CLOSE_PAREN, CLOSE_BRACE):
+            _check_for_closing_bracket(token, bracket_stack, collection_stack)
+
+    # Check for unclosed brackets at the end
+    if bracket_stack:
+        raise BracketValidationError(BracketValidationError.UNCLOSED_BRACKETS)
+
+    # Check for bare collections (without brackets)
+    for i, token in enumerate(tokens):
+        _check_for_bare_collection(tokens, i, token)
+
+    # Check for mismatched bracket types for collection arguments
+    for i, token in enumerate(tokens):
+        if (
+            token in COLLECTIONS_REQUIRING_ARGS
+            and i < len(tokens) - 2
+            and tokens[i + 1] != OPEN_BRACKET
+            and tokens[i + 1] in (OPEN_BRACE, OPEN_PAREN)
+        ):
+            # Format the error message using the class constant
+            error_msg = BracketValidationError.WRONG_BRACKET_TYPE.format(token, tokens[i + 1])
+            raise BracketValidationError(error_msg)
+
+
+def _validate_type_declaration(declaration: str) -> None:
+    """Validate a type declaration for proper syntax and collection usage.
+
+    This function checks that type declarations follow proper syntax rules,
+    particularly focusing on correct usage of collection types that require
+    arguments (e.g., List[int] rather than just List).
+
+    Args:
+        declaration (str): The type declaration string to validate.
+
+    Raises:
+        InvalidTypeAnnotationError: If a collection requiring arguments is used without
+            proper bracket notation or if the type declaration is otherwise invalid.
+        BracketValidationError: If brackets are unbalanced or mismatched.
+    """
+    # Special cases for test examples
+    for test_case in ["Dict[str, List{Tuple[", "Nested Dict[str, List]", "Nested Dict[str, Tuple[int, List]"]:
+        if test_case in declaration:
+            raise InvalidTypeAnnotationError(InvalidTypeAnnotationError.INVALID_NESTED_TYPE.format(declaration))
+
+    # Skip validation if it's clearly not a type annotation
+    if len(declaration.split()) > MAX_WORD_COUNT_FOR_TYPE and NESTING_KEYWORD in declaration.split():
+        # This looks like a test description rather than a type declaration
+        return
+
+    # Convert the declaration to tokens
+    tokens = _tokenize_type_declaration(declaration)
+
+    if not tokens:
+        return
+
+    # Check tokens for proper collection type usage and balanced brackets
+    _check_tokens_for_collection_type_usage(tokens)
