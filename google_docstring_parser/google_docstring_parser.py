@@ -180,11 +180,11 @@ def _parse_reference_line(line: str, *, is_single: bool = False) -> dict[str, st
         ReferenceFormatError: If the reference format is invalid
     """
     # Check if single reference has a dash (which it shouldn't)
-    if is_single and line.startswith("-"):
+    if is_single and line.lstrip().startswith("-"):
         raise ReferenceFormatError("dash_in_single")
 
     # Remove dash if present
-    content = line[1:].strip() if line.startswith("-") else line
+    content = line[1:].strip() if line.lstrip().startswith("-") else line.strip()
 
     # Find separator colon
     colon_index = _find_separator_colon(content)
@@ -206,6 +206,139 @@ def _parse_reference_line(line: str, *, is_single: bool = False) -> dict[str, st
     }
 
 
+def _identify_main_reference_lines(lines: list[str]) -> list[str]:
+    """Identify lines that are main reference lines vs continuations.
+
+    A line is considered a main reference line if:
+    1. It starts with a dash, or
+    2. It's the first line, or
+    3. It's indented the same or less than the previous reference line and contains a colon
+
+    Args:
+        lines (list[str]): All lines from the reference section
+
+    Returns:
+        list[str]: Lines identified as main reference lines
+    """
+    main_ref_lines: list[str] = []
+
+    # Always consider first line as a main reference line
+    if not lines:
+        return main_ref_lines
+
+    main_ref_lines.append(lines[0])
+    prev_indent = len(lines[0]) - len(lines[0].lstrip())
+
+    # Check remaining lines
+    for i in range(1, len(lines)):
+        line = lines[i]
+        line_indent = len(line) - len(line.lstrip())
+        is_dashed = line.lstrip().startswith("-")
+        has_colon = ":" in line
+
+        if is_dashed:
+            # Definitely a main reference
+            main_ref_lines.append(line)
+            prev_indent = line_indent
+        elif line_indent <= prev_indent and has_colon:
+            # Same or less indentation than previous with a colon - likely a new reference
+            main_ref_lines.append(line)
+            prev_indent = line_indent
+
+    return main_ref_lines
+
+
+def _process_single_reference(main_line: str, all_lines: list[str]) -> dict[str, str]:
+    """Process a single reference with possible continuation lines.
+
+    Args:
+        main_line (str): The main reference line
+        all_lines (list[str]): All lines from the reference section
+
+    Returns:
+        dict[str, str]: A dictionary with 'description' and 'source' keys
+
+    Raises:
+        ReferenceFormatError: If the reference format is invalid
+    """
+    # Single reference - should not have a dash
+    if main_line.lstrip().startswith("-"):
+        raise ReferenceFormatError("dash_in_single")
+
+    # Process all lines for this reference
+    ref_lines = [main_line]
+    line_indent = len(main_line) - len(main_line.lstrip())
+
+    # Add continuation lines if any
+    main_index = all_lines.index(main_line)
+    for j in range(main_index + 1, len(all_lines)):
+        next_line = all_lines[j]
+        next_indent = len(next_line) - len(next_line.lstrip())
+        if next_indent > line_indent:  # More indented means continuation
+            ref_lines.append(next_line)
+
+    # Join all lines for this reference
+    reference_text = " ".join(line.strip() for line in ref_lines)
+
+    # Parse the reference
+    return _parse_reference_line(reference_text, is_single=True)
+
+
+def _process_multiple_references(lines: list[str]) -> list[dict[str, str]]:
+    """Process multiple references with possible continuation lines.
+
+    Args:
+        lines (list[str]): All lines from the reference section
+
+    Returns:
+        list[dict[str, str]]: A list of dictionaries with 'description' and 'source' keys
+
+    Raises:
+        ReferenceFormatError: If the reference format is invalid
+    """
+    references = []
+    i = 0
+
+    while i < len(lines):
+        current_line = lines[i].rstrip()
+
+        # Check if this is a new reference (starts with dash)
+        if current_line.lstrip().startswith("-"):
+            # Reference with dash - determine if multiline by looking ahead
+            current_indent = len(current_line) - len(current_line.lstrip())
+            ref_lines = [current_line]
+
+            # Look ahead for continuation lines (properly indented, no dash)
+            j = i + 1
+            while j < len(lines):
+                next_line = lines[j].rstrip()
+                next_indent = len(next_line) - len(next_line.lstrip())
+
+                # If next line is indented more than current and doesn't start with dash,
+                # it's a continuation of the current reference description
+                if next_indent > current_indent and not next_line.lstrip().startswith("-"):
+                    ref_lines.append(next_line)
+                    j += 1
+                else:
+                    break
+
+            # Join all lines for this reference and parse
+            full_ref_text = " ".join(line.strip() for line in ref_lines)
+            ref = _parse_reference_line(full_ref_text)
+            references.append(ref)
+
+            # Skip the lines we processed
+            i = j - 1
+        else:
+            # A non-dashed line in a multi-reference context is an error
+            # (unless it's a continuation line, which we've already handled)
+            raise ReferenceFormatError("missing_dash")
+
+        i += 1
+
+    return references
+
+
 def _parse_references(reference_content: str) -> list[dict[str, str]]:
     """Parse references section into structured format.
 
@@ -219,24 +352,52 @@ def _parse_references(reference_content: str) -> list[dict[str, str]]:
         ReferenceFormatError: If the reference format is invalid
     """
     references: list[dict[str, str]] = []
-    lines = [line.strip() for line in reference_content.strip().split("\n") if line.strip()]
+    lines = [line for line in reference_content.strip().split("\n") if line.strip()]
 
     # Handle empty reference content
     if not lines:
         return references
 
-    # If we have multiple lines, all should start with dash
-    if len(lines) > 1:
-        if not all(line.startswith("-") for line in lines):
-            raise ReferenceFormatError("missing_dash")
+    # Identify main reference lines (not continuations)
+    main_ref_lines = _identify_main_reference_lines(lines)
 
-        # Process each line in the multi-line case using list comprehension
-        references.extend(_parse_reference_line(line) for line in lines)
-    else:
+    # Validate that multiple references all have dashes
+    if len(main_ref_lines) > 1 and not all(line.lstrip().startswith("-") for line in main_ref_lines):
+        raise ReferenceFormatError("missing_dash")
+
+    # Handle different cases based on number of references
+    if len(main_ref_lines) == 1:
         # Single reference case
-        references.append(_parse_reference_line(lines[0], is_single=True))
+        references.append(_process_single_reference(main_ref_lines[0], lines))
+    else:
+        # Multiple references case
+        references = _process_multiple_references(lines)
 
     return references
+
+
+def _is_continuation_line(line: str, all_lines: list[str]) -> bool:
+    """Determine if a line is a continuation of a previous reference.
+
+    A continuation line has greater indentation than the previous line
+    and doesn't start with a dash.
+
+    Args:
+        line (str): The line to check
+        all_lines (list[str]): All lines in the references section
+
+    Returns:
+        bool: True if this is a continuation line
+    """
+    line_index = all_lines.index(line)
+    if line_index == 0:
+        return False
+
+    current_indent = len(line) - len(line.lstrip())
+    prev_line = all_lines[line_index - 1]
+    prev_indent = len(prev_line) - len(prev_line.lstrip())
+
+    return current_indent > prev_indent and not line.lstrip().startswith("-")
 
 
 def _process_args_section(args: list[dict[str, str | None]], sections: dict[str, str], *, validate_types: bool) -> None:
