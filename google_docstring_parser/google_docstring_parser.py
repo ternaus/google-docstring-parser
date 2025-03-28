@@ -444,7 +444,7 @@ def _process_returns_section(sections: dict[str, str], *, validate_types: bool) 
     if (
         "Returns" not in sections
         or not (returns_lines := sections["Returns"].split("\n"))
-        or not (return_match := re.match(r"^(?:(\w+):\s*)?(.*)$", returns_lines[0].strip()))
+        or not (return_match := re.match(r"^(?:([^:]+):\s*)?(.*)$", returns_lines[0].strip()))
     ):
         return {}
 
