@@ -17,7 +17,6 @@ from typing import Any, NamedTuple
 import tomli
 
 from google_docstring_parser.google_docstring_parser import (
-    ReferenceFormatError,
     parse_google_docstring,
 )
 
@@ -305,6 +304,37 @@ def _format_error(context: DocstringContext, error: str) -> str:
     return msg
 
 
+def safe_execute(
+    context: DocstringContext,
+    func: callable,
+    *args,  # noqa: ANN002
+    error_prefix: str,
+    format_results: bool = True,
+) -> tuple[list[str], Any]:
+    """Safely execute a function and handle errors consistently.
+
+    Args:
+        context (DocstringContext): Context for error formatting
+        func (callable): Function to execute
+        *args (Any): Arguments to pass to the function
+        error_prefix (str): Prefix for error messages
+        format_results (bool): Whether to format results as errors
+
+    Returns:
+        tuple[list[str], Any]: Tuple containing:
+            - List of error messages
+            - Result of the function if successful, None otherwise
+    """
+    try:
+        result = func(*args)
+    except Exception as e:
+        return ([_format_error(context, f"{error_prefix}: {e}")], None)
+
+    if format_results and isinstance(result, list):
+        return ([_format_error(context, err) for err in result], None)
+    return ([], result)
+
+
 def _check_returns_section(context: DocstringContext, docstring: str) -> list[str]:
     """Check the Returns section name.
 
@@ -315,12 +345,12 @@ def _check_returns_section(context: DocstringContext, docstring: str) -> list[st
     Returns:
         list[str]: List of error messages
     """
-    errors = []
-    try:
-        name_errors = check_returns_section_name(docstring)
-        errors.extend(_format_error(context, err) for err in name_errors)
-    except Exception as e:
-        errors.append(_format_error(context, f"Error checking Returns section name: {e}"))
+    errors, _ = safe_execute(
+        context,
+        check_returns_section_name,
+        docstring,
+        error_prefix="Error checking Returns section name",
+    )
     return errors
 
 
@@ -334,13 +364,12 @@ def _validate_docstring_format(context: DocstringContext, docstring: str) -> lis
     Returns:
         list[str]: List of error messages
     """
-    errors = []
-    try:
-        val_errors = validate_docstring(docstring)
-        if val_errors:
-            errors.extend(_format_error(context, err) for err in val_errors)
-    except Exception as e:
-        errors.append(_format_error(context, f"Error validating docstring: {e}"))
+    errors, _ = safe_execute(
+        context,
+        validate_docstring,
+        docstring,
+        error_prefix="Error validating docstring",
+    )
     return errors
 
 
@@ -357,22 +386,26 @@ def _parse_and_check_returns(context: DocstringContext, docstring: str) -> tuple
             - Parsed docstring dictionary if successful, None otherwise
     """
     errors = []
-    parsed = None
 
-    try:
-        parsed = parse_google_docstring(docstring, validate_types=True)
-    except ReferenceFormatError as e:
-        errors.append(_format_error(context, f"Reference format error: {e}"))
-        return errors, None
-    except Exception as e:
-        errors.append(_format_error(context, f"Error parsing docstring: {e}"))
-        return errors, None
+    # Parse docstring
+    parse_errors, parsed = safe_execute(
+        context,
+        parse_google_docstring,
+        docstring,
+        error_prefix="Error parsing docstring",
+        format_results=False,
+    )
+    if parse_errors:
+        return parse_errors, None
 
-    try:
-        returns_errors = check_returns_type(parsed)
-        errors.extend(_format_error(context, err) for err in returns_errors)
-    except Exception as e:
-        errors.append(_format_error(context, f"Error checking Returns type: {e}"))
+    # Check returns type
+    returns_errors, _ = safe_execute(
+        context,
+        check_returns_type,
+        parsed,
+        error_prefix="Error checking Returns type",
+    )
+    errors.extend(returns_errors)
 
     return errors, parsed
 
@@ -390,18 +423,23 @@ def _check_additional_validations(context: DocstringContext, parsed: dict[str, A
     errors = []
 
     if context.require_param_types:
-        try:
-            type_errors = check_param_types(parsed, context.require_param_types)
-            errors.extend(_format_error(context, err) for err in type_errors)
-        except Exception as e:
-            errors.append(_format_error(context, f"Error checking parameter types: {e}"))
+        type_errors, _ = safe_execute(
+            context,
+            check_param_types,
+            parsed,
+            context.require_param_types,
+            error_prefix="Error checking parameter types",
+        )
+        errors.extend(type_errors)
 
     if context.check_references:
-        try:
-            ref_errors = check_references(parsed)
-            errors.extend(_format_error(context, err) for err in ref_errors)
-        except Exception as e:
-            errors.append(_format_error(context, f"Error checking references: {e}"))
+        ref_errors, _ = safe_execute(
+            context,
+            check_references,
+            parsed,
+            error_prefix="Error checking references",
+        )
+        errors.extend(ref_errors)
 
     return errors
 
