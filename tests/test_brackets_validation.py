@@ -89,9 +89,15 @@ def test_tokenize_type_declaration() -> None:
         ("List", True),
         ("Dict", True),
         ("List without brackets", True),
-        ("Nested Dict[str, List] with bare List", True),
-        ("Nested Dict[str, Tuple[int, List]] with bare List", True),
-        ("Dict[List, int]", True),  # List should have element type
+
+        # Invalid nested bare collections
+        ("Dict[str, List]", True),  # Bare List as value type
+        ("List[Dict]", True),  # Bare Dict as element type
+        ("Tuple[int, Dict]", True),  # Bare Dict in tuple
+        ("Dict[List, int]", True),  # Bare List as key type
+        ("Dict[str, Tuple[int, List]]", True),  # Bare List in nested tuple
+        ("List[Dict[str, List]]", True),  # Bare List in nested Dict
+        ("Dict[str, List[Dict]]", True),  # Bare Dict in nested List
     ],
 )
 def test_validate_type_declaration(type_declaration: str, should_raise: bool) -> None:

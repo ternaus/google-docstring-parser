@@ -535,11 +535,6 @@ def _validate_type_declaration(declaration: str) -> None:
         InvalidTypeAnnotationError: If the type declaration is invalid
         BracketValidationError: If bracket usage is invalid
     """
-    # Special cases for test examples
-    for test_case in ["Dict[str, List{Tuple[", "Nested Dict[str, List]", "Nested Dict[str, Tuple[int, List]"]:
-        if test_case in declaration:
-            raise InvalidTypeAnnotationError(InvalidTypeAnnotationError.INVALID_NESTED_TYPE.format(declaration))
-
     # Skip validation if it's clearly not a type annotation
     if len(declaration.split()) > MAX_WORD_COUNT_FOR_TYPE and NESTING_KEYWORD in declaration.split():
         # This looks like a test description rather than a type declaration
