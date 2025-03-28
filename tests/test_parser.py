@@ -197,6 +197,43 @@ from google_docstring_parser.google_docstring_parser import parse_google_docstri
                 "Example": ">>> import albumentations as A\n>>> transform = A.Compose([\n...     A.ElasticTransform(alpha=1, sigma=50, p=0.5),\n... ])\n>>> transformed = transform(image=image, mask=mask, bboxes=bboxes, keypoints=keypoints)\n>>> transformed_image = transformed['image']\n>>> transformed_mask = transformed['mask']\n>>> transformed_bboxes = transformed['bboxes']\n>>> transformed_keypoints = transformed['keypoints']",
             },
         ),
+
+        # Test case 8: Rain effects docstring with various parameter types
+        (
+            """Adds rain effects to an image.
+
+    This transform simulates rainfall by overlaying semi-transparent streaks onto the image,
+    creating a realistic rain effect. It can be used to augment datasets for computer vision
+    tasks that need to perform well in rainy conditions.
+
+    Args:
+        slant_range (tuple[float, float]): Range for the rain slant angle in degrees.
+            Negative values slant to the left, positive to the right. Default: (-10, 10).
+        drop_length (int | None): Length of the rain drops in pixels.
+            If None, drop length will be automatically calculated as height // 8.
+            This allows the rain effect to scale with the image size.
+            Default: None
+        drop_width (int): Width of the rain drops in pixels. Default: 1.
+        drop_color (tuple[int, int, int]): Color of the rain drops in RGB format. Default: (200, 200, 200).
+        blur_value (int): Blur value for simulating rain effect. Rainy views are typically blurry. Default: 7.
+        brightness_coefficient (float): Coefficient to adjust the brightness of the image.
+            Rainy scenes are usually darker. Should be in the range (0, 1]. Default: 0.7.
+        rain_type (Literal["drizzle", "heavy", "torrential", "default"]): Type of rain to simulate.
+        p (float): Probability of applying the transform. Default: 0.5.""",
+            {
+                "Description": "Adds rain effects to an image.\n\nThis transform simulates rainfall by overlaying semi-transparent streaks onto the image,\ncreating a realistic rain effect. It can be used to augment datasets for computer vision\ntasks that need to perform well in rainy conditions.",
+                "Args": [
+                    {"name": "slant_range", "type": "tuple[float, float]", "description": "Range for the rain slant angle in degrees.\nNegative values slant to the left, positive to the right. Default: (-10, 10)."},
+                    {"name": "drop_length", "type": "int | None", "description": "Length of the rain drops in pixels.\nIf None, drop length will be automatically calculated as height // 8.\nThis allows the rain effect to scale with the image size.\nDefault: None"},
+                    {"name": "drop_width", "type": "int", "description": "Width of the rain drops in pixels. Default: 1."},
+                    {"name": "drop_color", "type": "tuple[int, int, int]", "description": "Color of the rain drops in RGB format. Default: (200, 200, 200)."},
+                    {"name": "blur_value", "type": "int", "description": "Blur value for simulating rain effect. Rainy views are typically blurry. Default: 7."},
+                    {"name": "brightness_coefficient", "type": "float", "description": "Coefficient to adjust the brightness of the image.\nRainy scenes are usually darker. Should be in the range (0, 1]. Default: 0.7."},
+                    {"name": "rain_type", "type": 'Literal["drizzle", "heavy", "torrential", "default"]', "description": "Type of rain to simulate."},
+                    {"name": "p", "type": "float", "description": "Probability of applying the transform. Default: 0.5."}
+                ]
+            },
+        ),
     ],
 )
 def test_parse_google_docstring_parametrized(docstring: str, expected: dict[str, Any]) -> None:
