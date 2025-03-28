@@ -205,7 +205,7 @@ def test_parse_google_docstring_parametrized(docstring: str, expected: dict[str,
 
     # Remove the returns key from the result if it's an empty list
     # This allows the tests to pass without modifying all the test cases
-    if "Returns" in result and result["Returns"] == []:
+    if "Returns" in result and result["Returns"] == {}:
         del result["Returns"]
 
     assert result == expected

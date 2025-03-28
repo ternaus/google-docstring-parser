@@ -2,6 +2,9 @@
 
 This module provides functions to parse Google-style docstrings into structured dictionaries.
 
+Returns:
+    dict[str, Any]: A dictionary containing the parsed docstring components
+
 # CUSTOM LICENSE NOTICE FOR GOOGLE DOCSTRING PARSER
 #
 # Copyright (c) 2025 Vladimir Iglovikov
@@ -42,6 +45,9 @@ class ReferenceFormatError(ValueError):
     Args:
         code (str): Error code identifying the specific format issue
         line (str): The reference line that caused the error (optional)
+
+    Returns:
+        None
     """
 
     def __init__(self, code: str, line: str = "") -> None:
@@ -57,28 +63,44 @@ class ReferenceFormatError(ValueError):
 
 # Legacy error classes - kept for backward compatibility
 class MissingDashError(ReferenceFormatError):
-    """Error raised when a multiple reference doesn't start with a dash."""
+    """Error raised when a multiple reference doesn't start with a dash.
+
+    Returns:
+        None
+    """
 
     def __init__(self) -> None:
         super().__init__("missing_dash")
 
 
 class DashInSingleReferenceError(ReferenceFormatError):
-    """Error raised when a single reference starts with a dash."""
+    """Error raised when a single reference starts with a dash.
+
+    Returns:
+        None
+    """
 
     def __init__(self) -> None:
         super().__init__("dash_in_single")
 
 
 class MissingColonError(ReferenceFormatError):
-    """Error raised when a reference is missing a colon separator."""
+    """Error raised when a reference is missing a colon separator.
+
+    Returns:
+        None
+    """
 
     def __init__(self, line: str) -> None:
         super().__init__("missing_colon", line)
 
 
 class EmptyDescriptionError(ReferenceFormatError):
-    """Error raised when a reference has an empty description."""
+    """Error raised when a reference has an empty description.
+
+    Returns:
+        None
+    """
 
     def __init__(self, line: str) -> None:
         super().__init__("empty_description", line)
@@ -91,7 +113,7 @@ def _extract_sections(docstring: str) -> dict[str, str]:
         docstring (str): The docstring to extract sections from
 
     Returns:
-        A dictionary mapping section names to their content
+        dict[str, str]: A dictionary mapping section names to their content
     """
     sections: dict[str, str] = {}
     current_section = "Description"
@@ -142,7 +164,7 @@ def _find_separator_colon(content: str) -> int:
         content (str): The content to search in
 
     Returns:
-        The index of the separator colon, or -1 if not found
+        int: The index of the separator colon, or -1 if not found
     """
     # Skip colon in URLs like http://, https://, ftp://, etc.
     content_parts = content.split("://", 1)
@@ -174,7 +196,7 @@ def _parse_reference_line(line: str, *, is_single: bool = False) -> dict[str, st
         is_single (bool): Whether this is a single reference (not part of a list)
 
     Returns:
-        A dictionary with 'description' and 'source' keys
+        dict[str, str]: A dictionary with 'description' and 'source' keys
 
     Raises:
         ReferenceFormatError: If the reference format is invalid
@@ -207,18 +229,13 @@ def _parse_reference_line(line: str, *, is_single: bool = False) -> dict[str, st
 
 
 def _identify_main_reference_lines(lines: list[str]) -> list[str]:
-    """Identify lines that are main reference lines vs continuations.
-
-    A line is considered a main reference line if:
-    1. It starts with a dash, or
-    2. It's the first line, or
-    3. It's indented the same or less than the previous reference line and contains a colon
+    """Identify the main reference lines in a list of lines.
 
     Args:
-        lines (list[str]): All lines from the reference section
+        lines (list[str]): List of lines to process
 
     Returns:
-        list[str]: Lines identified as main reference lines
+        list[str]: List of main reference lines
     """
     main_ref_lines: list[str] = []
 
@@ -249,17 +266,14 @@ def _identify_main_reference_lines(lines: list[str]) -> list[str]:
 
 
 def _process_single_reference(main_line: str, all_lines: list[str]) -> dict[str, str]:
-    """Process a single reference with possible continuation lines.
+    """Process a single reference entry.
 
     Args:
         main_line (str): The main reference line
-        all_lines (list[str]): All lines from the reference section
+        all_lines (list[str]): All lines in the reference section
 
     Returns:
-        dict[str, str]: A dictionary with 'description' and 'source' keys
-
-    Raises:
-        ReferenceFormatError: If the reference format is invalid
+        dict[str, str]: A dictionary containing the reference information with 'description' and 'source' keys
     """
     # Single reference - should not have a dash
     if main_line.lstrip().startswith("-"):
@@ -285,16 +299,14 @@ def _process_single_reference(main_line: str, all_lines: list[str]) -> dict[str,
 
 
 def _process_multiple_references(lines: list[str]) -> list[dict[str, str]]:
-    """Process multiple references with possible continuation lines.
+    """Process multiple reference entries.
 
     Args:
-        lines (list[str]): All lines from the reference section
+        lines (list[str]): Lines containing multiple references
 
     Returns:
-        list[dict[str, str]]: A list of dictionaries with 'description' and 'source' keys
-
-    Raises:
-        ReferenceFormatError: If the reference format is invalid
+        list[dict[str, str]]: List of dictionaries containing reference information, each with 'description'
+            and 'source' keys
     """
     references = []
     i = 0
@@ -340,16 +352,14 @@ def _process_multiple_references(lines: list[str]) -> list[dict[str, str]]:
 
 
 def _parse_references(reference_content: str) -> list[dict[str, str]]:
-    """Parse references section into structured format.
+    """Parse references section content.
 
     Args:
-        reference_content (str): The content of the References section
+        reference_content (str): Content of the references section
 
     Returns:
-        A list of dictionaries with 'description' and 'source' keys
-
-    Raises:
-        ReferenceFormatError: If the reference format is invalid
+        list[dict[str, str]]: List of dictionaries containing reference information, each with
+            'description' and 'source' keys
     """
     references: list[dict[str, str]] = []
     lines = [line for line in reference_content.strip().split("\n") if line.strip()]
@@ -377,17 +387,14 @@ def _parse_references(reference_content: str) -> list[dict[str, str]]:
 
 
 def _is_continuation_line(line: str, all_lines: list[str]) -> bool:
-    """Determine if a line is a continuation of a previous reference.
-
-    A continuation line has greater indentation than the previous line
-    and doesn't start with a dash.
+    """Check if a line is a continuation of a previous line.
 
     Args:
         line (str): The line to check
-        all_lines (list[str]): All lines in the references section
+        all_lines (list[str]): All lines in the section
 
     Returns:
-        bool: True if this is a continuation line
+        bool: True if the line is a continuation line, False otherwise
     """
     line_index = all_lines.index(line)
     if line_index == 0:
@@ -400,23 +407,18 @@ def _is_continuation_line(line: str, all_lines: list[str]) -> bool:
     return current_indent > prev_indent and not line.lstrip().startswith("-")
 
 
-def _process_args_section(args: list[dict[str, str | None]], sections: dict[str, str], *, validate_types: bool) -> None:
-    """Process and validate the Args section of a docstring.
+def _process_args_section(args: list[dict[str, str | None]], *, validate_types: bool) -> None:
+    """Process the Args section of a docstring.
 
     Args:
-        args (list[dict[str, str | None]]): A list of dictionaries containing information about the arguments.
-        sections (dict[str, str]): A dictionary mapping section names to their content.
-        validate_types (bool): Whether to validate type annotations.
+        args (list[dict[str, str | None]]): List of argument dictionaries
+        validate_types (bool): Whether to validate type annotations
 
-    Raises:
-        InvalidTypeAnnotationError: If a type annotation is invalid.
+    Returns:
+        None
     """
     if not validate_types:
         return
-
-    # Check the entire Args section text for potential bare collections
-    # This catches issues like "Dict[str, List]" that might not be caught by individual parameter validation
-    check_text_for_bare_collections(sections["Args"])
 
     # Validate type annotations and check for bare nested collections
     for arg in args:
@@ -430,31 +432,29 @@ def _process_args_section(args: list[dict[str, str | None]], sections: dict[str,
 
 
 def _process_returns_section(sections: dict[str, str], *, validate_types: bool) -> dict[str, str]:
-    """Process and validate the Returns section of a docstring.
+    """Process the Returns section of a docstring.
 
     Args:
-        sections (dict[str, str]): A dictionary mapping section names to their content.
-        validate_types (bool): Whether to validate type annotations.
+        sections (dict[str, str]): Dictionary of docstring sections
+        validate_types (bool): Whether to validate type annotations
 
     Returns:
-        dict[str, str]: A dictionary containing information about type and description of the return value.
-
-    Raises:
-        InvalidTypeAnnotationError: If a type annotation is invalid.
+        dict[str, str]: Dictionary containing 'type' and 'description' keys for the return value
     """
     if (
         "Returns" not in sections
         or not (returns_lines := sections["Returns"].split("\n"))
         or not (return_match := re.match(r"^(?:(\w+):\s*)?(.*)$", returns_lines[0].strip()))
-        or not (return_desc := return_match[2])
     ):
         return {}
 
     return_type = return_match[1]
+    return_desc = return_match[2].strip()
 
-    # Check the entire Returns section text for potential bare collections
-    if validate_types:
-        check_text_for_bare_collections(sections["Returns"])
+    # If type exists -> description must exist
+    # If type is None -> description must be empty
+    if (return_type and not return_desc) or (not return_type and return_desc):
+        return {}
 
     if return_type and validate_types:
         # Validate the return type
@@ -464,18 +464,23 @@ def _process_returns_section(sections: dict[str, str], *, validate_types: bool) 
         if "[" in return_type and "]" in return_type:
             check_text_for_bare_collections(return_type)
 
-    return {"type": return_type, "description": return_desc.rstrip()}
+    return {"type": return_type, "description": return_desc}
 
 
 def parse_google_docstring(docstring: str, *, validate_types: bool = True) -> dict[str, Any]:
-    """Parse a Google-style docstring into a structured dictionary.
+    """Parse a Google-style docstring.
 
     Args:
         docstring (str): The docstring to parse
-        validate_types (bool): Whether to validate type annotations. Default is True.
+        validate_types (bool): Whether to validate type annotations
 
     Returns:
-        A dictionary with parsed docstring sections
+        dict[str, Any]: Dictionary containing the parsed docstring information with the following keys:
+            - Description (str): The main description of the function/class
+            - Args (list[dict[str, str | None]], optional): List of argument dictionaries
+            - Returns (dict[str, str], optional): Return type and description
+            - References/Reference (list[dict[str, str]], optional): List of references
+            - Other sections are included as is
     """
     if not docstring:
         return {}
@@ -505,11 +510,12 @@ def parse_google_docstring(docstring: str, *, validate_types: bool = True) -> di
             for arg in parsed.params
         ]
     ):
-        _process_args_section(args, sections, validate_types=validate_types)
+        _process_args_section(args, validate_types=validate_types)
         result["Args"] = args
 
-    # Process returns
-    result["Returns"] = _process_returns_section(sections, validate_types=validate_types)
+    # Process returns only if present
+    if "Returns" in sections:
+        result["Returns"] = _process_returns_section(sections, validate_types=validate_types)
 
     # Process references section
     for ref_section in ["References", "Reference"]:
