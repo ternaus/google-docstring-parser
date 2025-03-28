@@ -57,11 +57,7 @@ class ReferenceFormatError(ValueError):
 
 # Legacy error classes - kept for backward compatibility
 class MissingDashError(ReferenceFormatError):
-    """Error raised when a multiple reference doesn't start with a dash.
-
-    Returns:
-        None
-    """
+    """Error raised when a multiple reference doesn't start with a dash."""
 
     def __init__(self) -> None:
         super().__init__("missing_dash")

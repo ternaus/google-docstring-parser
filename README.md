@@ -80,7 +80,7 @@ Output:
             'source': 'https://example.com/elastic-transform'
         }
     ],
-    'Returns'":
+    'Returns':
         {
             "type": "dict[str, Any]",
             "description": "Some info here"
