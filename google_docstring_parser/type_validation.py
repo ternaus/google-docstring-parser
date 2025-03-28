@@ -14,9 +14,6 @@ This module contains functions and classes for validating type annotations in do
 #
 # Contact iglovikov@gmail.com to obtain a license before using this software.
 # See the LICENSE file for complete details.
-
-Returns:
-    None
 """
 
 from __future__ import annotations
@@ -96,9 +93,6 @@ class InvalidTypeAnnotationError(ValueError):
 
     Args:
         message (str): The error message.
-
-    Returns:
-        InvalidTypeAnnotationError: An error instance with the specified message
     """
 
     BARE_COLLECTION = "Collection must include element types"
@@ -122,9 +116,6 @@ class BracketValidationError(ValueError):
     """Error raised when brackets in a type annotation are not balanced or mismatched.
 
     Contains specific error types for different bracket validation issues.
-
-    Returns:
-        BracketValidationError: An error instance with the specified error type
     """
 
     UNBALANCED_CLOSING = "Closing bracket without matching opening bracket"

@@ -2,9 +2,6 @@
 
 This module provides functions to parse Google-style docstrings into structured dictionaries.
 
-Returns:
-    dict[str, Any]: A dictionary containing the parsed docstring components
-
 # CUSTOM LICENSE NOTICE FOR GOOGLE DOCSTRING PARSER
 #
 # Copyright (c) 2025 Vladimir Iglovikov
@@ -45,9 +42,6 @@ class ReferenceFormatError(ValueError):
     Args:
         code (str): Error code identifying the specific format issue
         line (str): The reference line that caused the error (optional)
-
-    Returns:
-        None
     """
 
     def __init__(self, code: str, line: str = "") -> None:
@@ -74,33 +68,21 @@ class MissingDashError(ReferenceFormatError):
 
 
 class DashInSingleReferenceError(ReferenceFormatError):
-    """Error raised when a single reference starts with a dash.
-
-    Returns:
-        None
-    """
+    """Error raised when a single reference starts with a dash."""
 
     def __init__(self) -> None:
         super().__init__("dash_in_single")
 
 
 class MissingColonError(ReferenceFormatError):
-    """Error raised when a reference is missing a colon separator.
-
-    Returns:
-        None
-    """
+    """Error raised when a reference is missing a colon separator."""
 
     def __init__(self, line: str) -> None:
         super().__init__("missing_colon", line)
 
 
 class EmptyDescriptionError(ReferenceFormatError):
-    """Error raised when a reference has an empty description.
-
-    Returns:
-        None
-    """
+    """Error raised when a reference has an empty description."""
 
     def __init__(self, line: str) -> None:
         super().__init__("empty_description", line)
@@ -229,7 +211,12 @@ def _parse_reference_line(line: str, *, is_single: bool = False) -> dict[str, st
 
 
 def _identify_main_reference_lines(lines: list[str]) -> list[str]:
-    """Identify the main reference lines in a list of lines.
+    """Identify lines that are main reference lines vs continuations.
+
+    A line is considered a main reference line if:
+    1. It starts with a dash, or
+    2. It's the first line, or
+    3. It's indented the same or less than the previous reference line and contains a colon
 
     Args:
         lines (list[str]): List of lines to process
@@ -464,7 +451,7 @@ def _process_returns_section(sections: dict[str, str], *, validate_types: bool) 
         if "[" in return_type and "]" in return_type:
             check_text_for_bare_collections(return_type)
 
-    return {"type": return_type, "description": return_desc}
+    return {"type": return_type, "description": return_desc.rstrip()}
 
 
 def parse_google_docstring(docstring: str, *, validate_types: bool = True) -> dict[str, Any]:

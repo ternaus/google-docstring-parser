@@ -2,8 +2,6 @@
 
 A lightweight, efficient parser for Google-style Python docstrings that converts them into structured dictionaries.
 
-Returns:
-    None
 """
 
 from google_docstring_parser.google_docstring_parser import ReferenceFormatError, parse_google_docstring
