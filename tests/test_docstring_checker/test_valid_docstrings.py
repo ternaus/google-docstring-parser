@@ -27,10 +27,10 @@ def function_with_sections(param: Dict[str, Any]) -> List[Any]:
     """Function with multiple sections.
 
     Args:
-        param (dict): A dictionary parameter
+        param (dict[str, Any]): A dictionary parameter
 
     Returns:
-        list: A list of items
+        list[str]: A list of items
 
     Raises:
         ValueError: If param is empty

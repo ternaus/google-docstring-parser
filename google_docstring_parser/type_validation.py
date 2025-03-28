@@ -104,6 +104,9 @@ class InvalidTypeAnnotationError(ValueError):
 
         Args:
             message (str): The error message.
+
+        Returns:
+            None
         """
         self.message = message
         super().__init__(message)
@@ -126,6 +129,9 @@ class BracketValidationError(ValueError):
 
         Args:
             error_type (str): One of the predefined error types.
+
+        Returns:
+            None
         """
         super().__init__(error_type)
 
@@ -137,9 +143,8 @@ def is_collection_type(type_name: str) -> bool:
         type_name (str): The type name to check.
 
     Returns:
-        bool: True if the type is a collection, False otherwise.
+        bool: True if the type is a collection, False otherwise
     """
-    # For exact match only
     return type_name in COLLECTIONS_REQUIRING_ARGS
 
 
@@ -150,7 +155,7 @@ def is_bare_collection(type_name: str) -> bool:
         type_name (str): The type name to check.
 
     Returns:
-        bool: True if the type is a bare collection, False otherwise.
+        bool: True if the type is a bare collection, False otherwise
     """
     return is_collection_type(type_name) and "[" not in type_name
 
@@ -160,6 +165,9 @@ def validate_type_annotation(type_annotation: str) -> None:
 
     Args:
         type_annotation (str): The type annotation to validate.
+
+    Returns:
+        None
 
     Raises:
         InvalidTypeAnnotationError: If the type annotation is invalid.
@@ -184,6 +192,9 @@ def check_text_for_bare_collections(text: str) -> None:
 
     Args:
         text (str): The text to check for bare collection types.
+
+    Returns:
+        None
 
     Raises:
         InvalidTypeAnnotationError: If a collection requiring arguments is used
@@ -237,11 +248,11 @@ def _is_within_string_literal(text: str, position: int) -> bool:
     """Check if a position in text is within a string literal.
 
     Args:
-        text (str): The text to check.
-        position (int): The character position to check.
+        text (str): The text to check
+        position (int): The position to check
 
     Returns:
-        bool: True if the position is within a string literal, False otherwise.
+        bool: True if the position is within a string literal, False otherwise
     """
     # Count quotes before the position to determine if we're in a string
     single_quotes = text[:position].count("'") % 2
@@ -250,13 +261,13 @@ def _is_within_string_literal(text: str, position: int) -> bool:
 
 
 def _looks_like_type_annotation(text: str) -> bool:
-    """Check if text appears to be a type annotation.
+    """Check if text looks like a type annotation.
 
     Args:
-        text (str): The text to check.
+        text (str): The text to check
 
     Returns:
-        bool: True if the text looks like a type annotation, False otherwise.
+        bool: True if the text looks like a type annotation, False otherwise
     """
     # Simple heuristic: contains a collection name and brackets
     for collection in COLLECTIONS_REQUIRING_ARGS:
@@ -266,15 +277,15 @@ def _looks_like_type_annotation(text: str) -> bool:
 
 
 def _process_string_literals(text: str) -> tuple[str, list[str]]:
-    """Extract string literals from text and replace with placeholders.
+    """Process string literals in text.
 
     Args:
-        text (str): The text containing string literals.
+        text (str): The text to process
 
     Returns:
         tuple[str, list[str]]: A tuple containing:
-            - The text with string literals replaced by placeholders
-            - A list of the extracted string literals
+            - The processed text with literals replaced by placeholders
+            - List of extracted string literals
     """
     # Extract string literals to avoid false positives in brackets
     pattern = r'(?:"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\')'
@@ -293,14 +304,14 @@ def _process_string_literals(text: str) -> tuple[str, list[str]]:
 
 
 def replace_string_literals(match: Match[AnyStr], literals: list[str]) -> str:
-    """Replace string literal placeholders with their original values.
+    """Replace string literal placeholders with actual literals.
 
     Args:
-        match (Match[AnyStr]): The regex match containing the placeholder.
-        literals (list[str]): The list of original string literals.
+        match (Match[AnyStr]): The regex match object
+        literals (list[str]): List of string literals
 
     Returns:
-        str: The string with placeholders replaced by the original literals.
+        str: The text with placeholders replaced by actual literals
     """
     placeholder = str(match.group(0))
     if placeholder.startswith("STR_LITERAL_"):
@@ -311,13 +322,13 @@ def replace_string_literals(match: Match[AnyStr], literals: list[str]) -> str:
 
 
 def _tokenize_type_declaration(declaration: str) -> list[str]:
-    """Split a type declaration into tokens.
+    """Tokenize a type declaration into individual components.
 
     Args:
-        declaration (str): The type declaration string.
+        declaration (str): The type declaration to tokenize
 
     Returns:
-        list[str]: A list of tokens from the type declaration.
+        list[str]: List of tokens from the type declaration
     """
     # Process string literals to avoid treating brackets in strings as real brackets
     processed_text, string_literals = _process_string_literals(declaration)
@@ -375,14 +386,20 @@ def _check_for_opening_bracket(
     bracket_stack: list[str],
     collection_stack: list[tuple[str, str]],
 ) -> None:
-    """Check for opening brackets and update stacks.
+    """Check for opening bracket in type declaration.
 
     Args:
-        tokens (list[str]): List of tokens from a type declaration.
-        i (int): Current token index.
-        token (str): Current token.
-        bracket_stack (list[str]): Stack tracking opening brackets.
-        collection_stack (list[tuple[str, str]]): Stack tracking collection types with their brackets.
+        tokens (list[str]): List of tokens
+        i (int): Current token index
+        token (str): Current token
+        bracket_stack (list[str]): Stack of open brackets
+        collection_stack (list[tuple[str, str]]): Stack of collection types
+
+    Returns:
+        None
+
+    Raises:
+        BracketValidationError: If bracket usage is invalid
     """
     bracket_stack.append(token)
 
@@ -392,15 +409,18 @@ def _check_for_opening_bracket(
 
 
 def _check_for_closing_bracket(token: str, bracket_stack: list[str], collection_stack: list[tuple[str, str]]) -> None:
-    """Check for closing brackets and validate against bracket stack.
+    """Check for closing bracket in type declaration.
 
     Args:
-        token (str): Current token.
-        bracket_stack (list[str]): Stack tracking opening brackets.
-        collection_stack (list[tuple[str, str]]): Stack tracking collection types with their brackets.
+        token (str): Current token
+        bracket_stack (list[str]): Stack of open brackets
+        collection_stack (list[tuple[str, str]]): Stack of collection types
+
+    Returns:
+        None
 
     Raises:
-        BracketValidationError: If brackets are unbalanced or mismatched.
+        BracketValidationError: If bracket usage is invalid
     """
     if not bracket_stack:
         raise BracketValidationError(BracketValidationError.UNBALANCED_CLOSING)
@@ -420,15 +440,18 @@ def _check_for_closing_bracket(token: str, bracket_stack: list[str], collection_
 
 
 def _check_for_bare_collection(tokens: list[str], i: int, token: str) -> None:
-    """Check if a token is a bare collection without required brackets.
+    """Check for bare collection type usage.
 
     Args:
-        tokens (list[str]): List of tokens from a type declaration.
-        i (int): Current token index.
-        token (str): Current token.
+        tokens (list[str]): List of tokens
+        i (int): Current token index
+        token (str): Current token
+
+    Returns:
+        None
 
     Raises:
-        InvalidTypeAnnotationError: If a collection type appears without required brackets.
+        InvalidTypeAnnotationError: If a bare collection type is found
     """
     if token in COLLECTIONS_REQUIRING_ARGS:
         # Skip if this collection is followed by an opening bracket
@@ -444,14 +467,17 @@ def _check_for_bare_collection(tokens: list[str], i: int, token: str) -> None:
 
 
 def _check_tokens_for_collection_type_usage(tokens: list[str]) -> None:
-    """Check tokens for proper use of collection types with brackets.
+    """Check tokens for proper collection type usage.
 
     Args:
-        tokens (list[str]): List of tokens from a type declaration.
+        tokens (list[str]): List of tokens to check
+
+    Returns:
+        None
 
     Raises:
-        BracketValidationError: If brackets are unbalanced or mismatched.
-        InvalidTypeAnnotationError: If a collection type appears without required type arguments.
+        InvalidTypeAnnotationError: If collection type usage is invalid
+        BracketValidationError: If bracket usage is invalid
     """
     bracket_stack: list[str] = []
     collection_stack: list[tuple[str, str]] = []
@@ -488,25 +514,18 @@ def _check_tokens_for_collection_type_usage(tokens: list[str]) -> None:
 
 
 def _validate_type_declaration(declaration: str) -> None:
-    """Validate a type declaration for proper syntax and collection usage.
-
-    This function checks that type declarations follow proper syntax rules,
-    particularly focusing on correct usage of collection types that require
-    arguments (e.g., List[int] rather than just List).
+    """Validate a type declaration.
 
     Args:
-        declaration (str): The type declaration string to validate.
+        declaration (str): The type declaration to validate
+
+    Returns:
+        None
 
     Raises:
-        InvalidTypeAnnotationError: If a collection requiring arguments is used without
-            proper bracket notation or if the type declaration is otherwise invalid.
-        BracketValidationError: If brackets are unbalanced or mismatched.
+        InvalidTypeAnnotationError: If the type declaration is invalid
+        BracketValidationError: If bracket usage is invalid
     """
-    # Special cases for test examples
-    for test_case in ["Dict[str, List{Tuple[", "Nested Dict[str, List]", "Nested Dict[str, Tuple[int, List]"]:
-        if test_case in declaration:
-            raise InvalidTypeAnnotationError(InvalidTypeAnnotationError.INVALID_NESTED_TYPE.format(declaration))
-
     # Skip validation if it's clearly not a type annotation
     if len(declaration.split()) > MAX_WORD_COUNT_FOR_TYPE and NESTING_KEYWORD in declaration.split():
         # This looks like a test description rather than a type declaration

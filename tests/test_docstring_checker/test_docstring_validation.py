@@ -141,11 +141,8 @@ def test_get_docstrings() -> None:
     valid_file = Path(__file__).parent / "test_valid_docstrings.py"
     docstrings = get_docstrings(valid_file)
 
-    # Check that we found the module docstring
-    assert docstrings[0][0] == "module"
-
     # Check that we found the class and function docstrings
-    function_names = [name for name, _, _, _ in docstrings[1:]]
+    function_names = [name for name, _, _, _ in docstrings]
     assert "simple_function" in function_names
     assert "function_with_args" in function_names
     assert "function_with_sections" in function_names
@@ -155,11 +152,8 @@ def test_get_docstrings() -> None:
     malformed_file = Path(__file__).parent / "test_malformed_docstrings.py"
     docstrings = get_docstrings(malformed_file)
 
-    # Check that we found the module docstring
-    assert docstrings[0][0] == "module"
-
     # Check that we found the function docstrings with issues
-    function_names = [name for name, _, _, _ in docstrings[1:]]
+    function_names = [name for name, _, _, _ in docstrings]
     assert "missing_arg_type" in function_names
     assert "malformed_section" in function_names
     assert "unclosed_parenthesis" in function_names
@@ -198,7 +192,7 @@ def test_get_docstrings() -> None:
                 bool: True if successful
             """,
             2,
-            1,
+            2,
         ),
         # Docstring with multiple sections
         (
@@ -214,7 +208,7 @@ def test_get_docstrings() -> None:
                 ValueError: If param1 is negative
             """,
             1,
-            1,
+            2,
         ),
     ],
 )

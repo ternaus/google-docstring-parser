@@ -1,1 +1,5 @@
-"""Tools for the google-docstring-parser package."""
+"""Tools for the google-docstring-parser package.
+
+Returns:
+    None
+"""

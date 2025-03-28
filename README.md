@@ -45,6 +45,8 @@ Example:
 References:
     - Original paper: Simard, P. Y., et al. "Best practices for convolutional neural networks applied to visual document analysis." ICDAR 2003
     - Implementation details: https://example.com/elastic-transform
+Returns:
+    dict[str, Any]: Some info here
 '''
 
 parsed = parse_google_docstring(docstring)
@@ -77,7 +79,12 @@ Output:
             'description': 'Implementation details',
             'source': 'https://example.com/elastic-transform'
         }
-    ]
+    ],
+    'Returns':
+        {
+            "type": "dict[str, Any]",
+            "description": "Some info here"
+        }
 }
 ```
 

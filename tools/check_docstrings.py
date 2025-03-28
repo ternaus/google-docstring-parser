@@ -17,7 +17,6 @@ from typing import Any, NamedTuple
 import tomli
 
 from google_docstring_parser.google_docstring_parser import (
-    ReferenceFormatError,
     parse_google_docstring,
 )
 
@@ -41,6 +40,9 @@ class DocstringContext(NamedTuple):
         verbose (bool): Whether to print verbose output
         require_param_types (bool): Whether parameter types are required
         check_references (bool): Whether to check references for errors
+
+    Returns:
+        DocstringContext: A named tuple containing docstring processing context
     """
 
     file_path: Path
@@ -55,7 +57,7 @@ def load_pyproject_config() -> dict[str, Any]:
     """Load configuration from pyproject.toml if it exists.
 
     Returns:
-        Dictionary with configuration values
+        dict[str, Any]: Dictionary with configuration values
     """
     config = DEFAULT_CONFIG.copy()
 
@@ -98,7 +100,11 @@ def get_docstrings(file_path: Path) -> list[tuple[str, int, str | None, ast.AST 
         file_path (Path): Path to the Python file
 
     Returns:
-        List of tuples containing (function/class name, line number, docstring, node)
+        list[tuple[str, int, str | None, ast.AST | None]]: List of tuples containing:
+            - str: function/class name
+            - int: line number
+            - str | None: docstring
+            - ast.AST | None: AST node
     """
     with file_path.open(encoding="utf-8") as f:
         content = f.read()
@@ -111,11 +117,7 @@ def get_docstrings(file_path: Path) -> list[tuple[str, int, str | None, ast.AST 
 
     docstrings = []
 
-    # Get module docstring
-    if len(tree.body) > 0 and isinstance(tree.body[0], ast.Expr) and isinstance(tree.body[0].value, ast.Constant):
-        docstrings.append(("module", 1, tree.body[0].value.value, None))
-
-    # Get function and class docstrings
+    # Get function and class docstrings only
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.ClassDef, ast.AsyncFunctionDef)):
             docstring = ast.get_docstring(node)
@@ -133,7 +135,7 @@ def check_param_types(docstring_dict: dict[str, Any], require_types: bool) -> li
         require_types (bool): Whether parameter types are required
 
     Returns:
-        List of error messages for parameters missing types or having invalid types
+        list[str]: List of error messages for parameters missing types or having invalid types
     """
     if not require_types or "Args" not in docstring_dict:
         return []
@@ -148,15 +150,15 @@ def check_param_types(docstring_dict: dict[str, Any], require_types: bool) -> li
     return errors
 
 
-def _check_reference_fields(reference: dict, index: int) -> list[str]:
+def _check_reference_fields(reference: dict[str, Any], index: int) -> list[str]:
     """Check a single reference for missing or empty fields.
 
     Args:
-        reference (dict): The reference to check
+        reference (dict[str, Any]): The reference to check
         index (int): The index of the reference (for error messages)
 
     Returns:
-        List of error messages
+        list[str]: List of error messages
     """
     errors = []
 
@@ -181,7 +183,7 @@ def check_references(docstring_dict: dict[str, Any]) -> list[str]:
         docstring_dict (dict[str, Any]): Parsed docstring dictionary
 
     Returns:
-        List of error messages for problematic references
+        list[str]: List of error messages for problematic references
     """
     errors = []
 
@@ -220,7 +222,7 @@ def validate_docstring(docstring: str) -> list[str]:
         docstring (str): The docstring to validate
 
     Returns:
-        List of validation error messages
+        list[str]: List of validation error messages
     """
     errors = []
 
@@ -247,6 +249,45 @@ def validate_docstring(docstring: str) -> list[str]:
     return errors
 
 
+def check_returns_section_name(docstring: str) -> list[str]:
+    """Check for incorrect Returns section names.
+
+    Args:
+        docstring (str): The docstring to check
+
+    Returns:
+        list[str]: List of error messages for incorrect Returns section names
+    """
+    errors = []
+    lines = docstring.split("\n")
+    for line in lines:
+        stripped = line.strip()
+        if stripped in ["return:", "Return:", "returns:"]:
+            errors.append(f"Invalid section name '{stripped}', use 'Returns:' instead")
+    return errors
+
+
+def check_returns_type(docstring_dict: dict[str, Any]) -> list[str]:
+    """Check Returns type in a docstring.
+
+    Args:
+        docstring_dict (dict[str, Any]): Parsed docstring dictionary
+
+    Returns:
+        list[str]: List of error messages for invalid return types
+    """
+    errors = []
+    if docstring_dict.get("Returns"):
+        returns = docstring_dict["Returns"]
+        # Special case: Returns section just contains "None"
+        if isinstance(returns, str) and returns.strip() == "None":
+            return errors
+
+        if isinstance(returns, dict) and not returns.get("type"):
+            errors.append("Returns section is missing type annotation")
+    return errors
+
+
 def _format_error(context: DocstringContext, error: str) -> str:
     """Format an error message consistently.
 
@@ -263,6 +304,146 @@ def _format_error(context: DocstringContext, error: str) -> str:
     return msg
 
 
+def safe_execute(
+    context: DocstringContext,
+    func: callable,
+    *args,  # noqa: ANN002
+    error_prefix: str,
+    format_results: bool = True,
+) -> tuple[list[str], Any]:
+    """Safely execute a function and handle errors consistently.
+
+    Args:
+        context (DocstringContext): Context for error formatting
+        func (callable): Function to execute
+        *args (Any): Arguments to pass to the function
+        error_prefix (str): Prefix for error messages
+        format_results (bool): Whether to format results as errors
+
+    Returns:
+        tuple[list[str], Any]: Tuple containing:
+            - List of error messages
+            - Result of the function if successful, None otherwise
+    """
+    try:
+        result = func(*args)
+    except Exception as e:
+        return ([_format_error(context, f"{error_prefix}: {e}")], None)
+
+    if format_results and isinstance(result, list):
+        return ([_format_error(context, err) for err in result], None)
+    return ([], result)
+
+
+def _check_returns_section(context: DocstringContext, docstring: str) -> list[str]:
+    """Check the Returns section name.
+
+    Args:
+        context (DocstringContext): Docstring context
+        docstring (str): The docstring to process
+
+    Returns:
+        list[str]: List of error messages
+    """
+    errors, _ = safe_execute(
+        context,
+        check_returns_section_name,
+        docstring,
+        error_prefix="Error checking Returns section name",
+    )
+    return errors
+
+
+def _validate_docstring_format(context: DocstringContext, docstring: str) -> list[str]:
+    """Validate docstring format.
+
+    Args:
+        context (DocstringContext): Docstring context
+        docstring (str): The docstring to process
+
+    Returns:
+        list[str]: List of error messages
+    """
+    errors, _ = safe_execute(
+        context,
+        validate_docstring,
+        docstring,
+        error_prefix="Error validating docstring",
+    )
+    return errors
+
+
+def _parse_and_check_returns(context: DocstringContext, docstring: str) -> tuple[list[str], dict[str, Any] | None]:
+    """Parse docstring and check returns type.
+
+    Args:
+        context (DocstringContext): Docstring context
+        docstring (str): The docstring to process
+
+    Returns:
+        tuple[list[str], dict[str, Any] | None]: Tuple containing:
+            - List of error messages
+            - Parsed docstring dictionary if successful, None otherwise
+    """
+    errors = []
+
+    # Parse docstring
+    parse_errors, parsed = safe_execute(
+        context,
+        parse_google_docstring,
+        docstring,
+        error_prefix="Error parsing docstring",
+        format_results=False,
+    )
+    if parse_errors:
+        return parse_errors, None
+
+    # Check returns type
+    returns_errors, _ = safe_execute(
+        context,
+        check_returns_type,
+        parsed,
+        error_prefix="Error checking Returns type",
+    )
+    errors.extend(returns_errors)
+
+    return errors, parsed
+
+
+def _check_additional_validations(context: DocstringContext, parsed: dict[str, Any]) -> list[str]:
+    """Run additional validations on parsed docstring.
+
+    Args:
+        context (DocstringContext): Docstring context
+        parsed (dict[str, Any]): Parsed docstring
+
+    Returns:
+        list[str]: List of error messages
+    """
+    errors = []
+
+    if context.require_param_types:
+        type_errors, _ = safe_execute(
+            context,
+            check_param_types,
+            parsed,
+            context.require_param_types,
+            error_prefix="Error checking parameter types",
+        )
+        errors.extend(type_errors)
+
+    if context.check_references:
+        ref_errors, _ = safe_execute(
+            context,
+            check_references,
+            parsed,
+            error_prefix="Error checking references",
+        )
+        errors.extend(ref_errors)
+
+    return errors
+
+
 def _process_docstring(context: DocstringContext, docstring: str) -> list[str]:
     """Process a single docstring.
 
@@ -273,47 +454,28 @@ def _process_docstring(context: DocstringContext, docstring: str) -> list[str]:
     Returns:
         list[str]: List of error messages
     """
-    errors = []
     if not docstring:
+        return []
+
+    errors = []
+
+    # Check Returns section name
+    errors.extend(_check_returns_section(context, docstring))
+
+    # Validate docstring format
+    format_errors = _validate_docstring_format(context, docstring)
+    errors.extend(format_errors)
+    if format_errors:
         return errors
 
-    # Validate docstring inline
-    try:
-        val_errors = validate_docstring(docstring)
-        if val_errors:
-            errors.extend(_format_error(context, err) for err in val_errors)
-    except Exception as e:
-        errors.append(_format_error(context, f"Error validating docstring: {e}"))
+    # Parse and check returns
+    parse_errors, parsed = _parse_and_check_returns(context, docstring)
+    errors.extend(parse_errors)
+    if not parsed:
         return errors
 
-    # Parse docstring inline
-    try:
-        # Disable type validation for the test files
-        # This allows us to maintain compatibility with existing docstrings
-        parsed = parse_google_docstring(docstring, validate_types=False)
-    except ReferenceFormatError as e:
-        # Catch specific reference format errors
-        errors.append(_format_error(context, f"Reference format error: {e}"))
-        return errors
-    except Exception as e:
-        errors.append(_format_error(context, f"Error parsing docstring: {e}"))
-        return errors
-
-    # Check parameter types (if required) inline
-    if context.require_param_types:
-        try:
-            type_errors = check_param_types(parsed, context.require_param_types)
-            errors.extend(_format_error(context, err) for err in type_errors)
-        except Exception as e:
-            errors.append(_format_error(context, f"Error checking parameter types: {e}"))
-
-    # Check references (if enabled)
-    if context.check_references:
-        try:
-            ref_errors = check_references(parsed)
-            errors.extend(_format_error(context, err) for err in ref_errors)
-        except Exception as e:
-            errors.append(_format_error(context, f"Error checking references: {e}"))
+    # Run additional validations
+    errors.extend(_check_additional_validations(context, parsed))
 
     return errors
 
@@ -333,7 +495,7 @@ def check_file(
         check_references (bool): Whether to check references for errors
 
     Returns:
-        List of error messages
+        list[str]: List of error messages
     """
     if verbose:
         print(f"Checking {file_path}")
@@ -380,7 +542,7 @@ def scan_directory(
         check_references (bool): Whether to check references for errors
 
     Returns:
-        List of error messages
+        list[str]: List of error messages
     """
     if exclude_files is None:
         exclude_files = []
@@ -408,7 +570,7 @@ def _parse_args() -> argparse.Namespace:
     """Parse command line arguments.
 
     Returns:
-        Parsed arguments
+        argparse.Namespace: Parsed command line arguments
     """
     parser = argparse.ArgumentParser(
         description="Check that docstrings in specified folders can be parsed.",
@@ -446,14 +608,19 @@ def _get_config_values(
     args: argparse.Namespace,
     config: dict[str, Any],
 ) -> tuple[list[str], bool, bool, bool, list[str]]:
-    """Get configuration values from command line args and config.
+    """Get configuration values from command line arguments and config file.
 
     Args:
         args (argparse.Namespace): Command line arguments
-        config (dict[str, Any]): Configuration from pyproject.toml
+        config (dict[str, Any]): Configuration dictionary
 
     Returns:
-        Tuple of (paths, require_param_types, verbose, check_references, exclude_files)
+        tuple[list[str], bool, bool, bool, list[str]]: Tuple containing:
+            - List of paths to check
+            - Whether to require parameter types
+            - Whether to check references
+            - Whether to enable verbose output
+            - List of files to exclude
     """
     # Get paths
     paths = args.paths or config["paths"]
@@ -490,17 +657,17 @@ def _process_paths(
     verbose: bool,
     check_references: bool,
 ) -> list[str]:
-    """Process paths and collect errors.
+    """Process paths and check docstrings.
 
     Args:
-        paths (list[str]): List of paths to process
+        paths (list[str]): List of paths to check
         exclude_files (list[str]): List of files to exclude
-        require_param_types (bool): Whether to require parameter types
+        require_param_types (bool): Whether parameter types are required
         verbose (bool): Whether to print verbose output
         check_references (bool): Whether to check references for errors
 
     Returns:
-        List of error messages
+        list[str]: List of error messages
     """
     all_errors = []
     for path_str in paths:
@@ -516,8 +683,12 @@ def _process_paths(
     return all_errors
 
 
-def main():
-    """Run the docstring checker."""
+def main() -> None:
+    """Run the docstring checker.
+
+    Returns:
+        None
+    """
     # Load configuration from pyproject.toml
     config = load_pyproject_config()
 
