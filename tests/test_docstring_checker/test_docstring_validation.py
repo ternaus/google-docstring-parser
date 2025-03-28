@@ -198,7 +198,7 @@ def test_get_docstrings() -> None:
                 bool: True if successful
             """,
             2,
-            1,
+            2,
         ),
         # Docstring with multiple sections
         (
@@ -214,7 +214,7 @@ def test_get_docstrings() -> None:
                 ValueError: If param1 is negative
             """,
             1,
-            1,
+            2,
         ),
     ],
 )

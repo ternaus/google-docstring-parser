@@ -429,7 +429,7 @@ def _process_args_section(args: list[dict[str, str | None]], sections: dict[str,
                 check_text_for_bare_collections(arg["type"])
 
 
-def _process_returns_section(sections: dict[str, str], *, validate_types: bool) -> list[dict[str, str]]:
+def _process_returns_section(sections: dict[str, str], *, validate_types: bool) -> dict[str, str]:
     """Process and validate the Returns section of a docstring.
 
     Args:
@@ -437,7 +437,7 @@ def _process_returns_section(sections: dict[str, str], *, validate_types: bool) 
         validate_types (bool): Whether to validate type annotations.
 
     Returns:
-        list[dict[str, str]]: A list of dictionaries containing information about the return values.
+        dict[str, str]: A dictionary containing information about type and description of the return value.
 
     Raises:
         InvalidTypeAnnotationError: If a type annotation is invalid.
@@ -448,7 +448,7 @@ def _process_returns_section(sections: dict[str, str], *, validate_types: bool) 
         or not (return_match := re.match(r"^(?:(\w+):\s*)?(.*)$", returns_lines[0].strip()))
         or not (return_desc := return_match[2])
     ):
-        return []
+        return {}
 
     return_type = return_match[1]
 
@@ -464,7 +464,7 @@ def _process_returns_section(sections: dict[str, str], *, validate_types: bool) 
         if "[" in return_type and "]" in return_type:
             check_text_for_bare_collections(return_type)
 
-    return [{"type": return_type, "description": return_desc.rstrip()}]
+    return {"type": return_type, "description": return_desc.rstrip()}
 
 
 def parse_google_docstring(docstring: str, *, validate_types: bool = True) -> dict[str, Any]:
