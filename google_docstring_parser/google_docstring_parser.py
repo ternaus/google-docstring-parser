@@ -375,10 +375,20 @@ def _parse_references(reference_content: str) -> list[dict[str, str]]:
 def _validate_type_with_error_handling(type_str: str, result: dict[str, Any], collect_errors: bool) -> None:
     """Validate a type annotation and handle any errors.
 
+    This function validates type annotations and handles errors differently based on the collect_errors flag:
+    - When collect_errors is True: Errors are added to result["errors"] list instead of being raised
+    - When collect_errors is False: Errors are raised immediately as InvalidTypeAnnotationError
+
     Args:
         type_str (str): The type annotation to validate
-        result (dict[str, Any]): The result dictionary to add errors to
-        collect_errors (bool): Whether to collect errors or raise them
+        result (dict[str, Any]): The result dictionary to add errors to when collect_errors is True
+        collect_errors (bool): Whether to collect errors in result["errors"] (True) or raise them (False)
+
+    Returns:
+        None
+
+    Raises:
+        InvalidTypeAnnotationError: If type validation fails and collect_errors is False
     """
     try:
         validate_type_annotation(type_str)
@@ -428,6 +438,44 @@ def _process_args_with_validation(
     result["Args"] = args
 
 
+def _parse_returns_section(sections: dict[str, str], *, validate_types: bool) -> dict[str, str] | str:
+    """Process the Returns section of a docstring.
+
+    Args:
+        sections (dict[str, str]): The sections dictionary
+        validate_types (bool): Whether to validate type annotations
+
+    Returns:
+        dict[str, str] | str: Either:
+            - A dictionary with 'type' and 'description' keys
+            - The string 'None' if the section only contains 'None'
+            - An empty dict if no return information is found
+    """
+    if (
+        "Returns" not in sections
+        or not (returns_lines := sections["Returns"].split("\n"))
+        or not (return_match := re.match(r"^(?:([^:]+):\s*)?(.*)$", returns_lines[0].strip()))
+    ):
+        return {}
+
+    return_type = return_match[1]
+    return_desc = return_match[2].strip()
+
+    # Special case: Returns section just contains "None"
+    if not return_type and return_desc == "None":
+        return "None"
+
+    # Validate type if present
+    if return_type and validate_types:
+        validate_type_annotation(return_type)
+
+        # Check for nested types
+        if "[" in return_type and "]" in return_type:
+            check_text_for_bare_collections(return_type)
+
+    return {"type": return_type, "description": return_desc.rstrip()}
+
+
 def _process_returns_with_validation(
     sections: dict[str, str],
     result: dict[str, Any],
@@ -446,7 +494,7 @@ def _process_returns_with_validation(
         return
 
     try:
-        returns = _process_returns_section(sections, validate_types=validate_types)
+        returns = _parse_returns_section(sections, validate_types=validate_types)
         if isinstance(returns, dict) and returns.get("type") and validate_types:
             _validate_type_with_error_handling(returns["type"], result, collect_errors)
         result["Returns"] = returns
@@ -471,33 +519,6 @@ def _process_references_section(sections: dict[str, str], result: dict[str, Any]
             # Don't add this section to the general sections mapping later
             sections.pop(ref_section, None)
             break
-
-
-def _process_returns_section(sections: dict[str, str], *, validate_types: bool) -> dict[str, str] | str:
-    """Process the Returns section of a docstring."""
-    if (
-        "Returns" not in sections
-        or not (returns_lines := sections["Returns"].split("\n"))
-        or not (return_match := re.match(r"^(?:([^:]+):\s*)?(.*)$", returns_lines[0].strip()))
-    ):
-        return {}
-
-    return_type = return_match[1]
-    return_desc = return_match[2].strip()
-
-    # Special case: Returns section just contains "None"
-    if not return_type and return_desc == "None":
-        return "None"
-
-    # Validate type if present
-    if return_type and validate_types:
-        validate_type_annotation(return_type)
-
-        # Check for nested types
-        if "[" in return_type and "]" in return_type:
-            check_text_for_bare_collections(return_type)
-
-    return {"type": return_type, "description": return_desc.rstrip()}
 
 
 def parse_google_docstring(
