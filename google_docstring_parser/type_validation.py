@@ -483,7 +483,7 @@ def _is_bare_collection_in_nested_type(token: str, tokens: list[str], i: int, br
     has_next_token: bool = i < len(tokens) - 1
     next_token_not_bracket: bool = tokens[i + 1] != OPEN_BRACKET if has_next_token else False
 
-    return bool(is_collection and has_brackets and has_next_token and next_token_not_bracket)
+    return is_collection and has_brackets and has_next_token and next_token_not_bracket
 
 
 def _check_tokens_for_collection_type_usage(tokens: list[str]) -> None:
