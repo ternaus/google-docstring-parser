@@ -257,3 +257,101 @@ def test_error_count_reporting(code: str, expected_count: int, expected_message:
     assert result.returncode == 1, "Checker should fail when errors are found"
     assert expected_message in result.stdout, f"Expected error count message '{expected_message}' not found in output"
     assert result.stdout.count("Parameter") == expected_count, f"Expected {expected_count} parameter type errors"
+
+
+@pytest.mark.parametrize(
+    "code,expected_returncode,expected_output",
+    [
+        # Valid None return
+        (
+            '''
+"""Test module with None return."""
+
+def function_with_none_return():
+    """Function returning None.
+
+    Returns:
+        None
+    """
+    return None
+''',
+            0,
+            "",
+        ),
+        # Valid typed return
+        (
+            '''
+"""Test module with typed return."""
+
+def function_with_typed_return():
+    """Function with typed return.
+
+    Returns:
+        bool: Success flag
+    """
+    return True
+''',
+            0,
+            "",
+        ),
+        # Invalid return format
+        (
+            '''
+"""Test module with invalid return."""
+
+def function_with_invalid_return():
+    """Function with invalid return.
+
+    Returns:
+        Just some text without type
+    """
+    return True
+''',
+            1,
+            "Returns section is missing type annotation",
+        ),
+        # Missing return type
+        (
+            '''
+"""Test module with missing return type."""
+
+def function_with_missing_return_type():
+    """Function with missing return type.
+
+    Returns:
+        Success flag
+    """
+    return True
+''',
+            1,
+            "Returns section is missing type annotation",
+        ),
+    ],
+)
+def test_returns_validation(code: str, expected_returncode: int, expected_output: str, tmp_path: Path) -> None:
+    """Test that the checker validates Returns sections correctly.
+
+    Args:
+        code (str): Python code to test
+        expected_returncode (int): Expected return code
+        expected_output (str): Expected output (empty for success)
+        tmp_path (Path): Temporary directory fixture
+    """
+    temp_file = tmp_path / "test_file.py"
+    temp_file.write_text(code)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "tools.check_docstrings",
+            str(temp_file),
+            "--verbose",
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == expected_returncode
+    if expected_output:
+        assert expected_output in result.stdout

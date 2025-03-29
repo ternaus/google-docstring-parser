@@ -177,7 +177,7 @@ def validate_type_annotation(type_annotation: str) -> None:
 
     # Check for bare collection types without arguments - exact match only
     if is_bare_collection(type_annotation):
-        error_msg = f"Collection type '{type_annotation}' must include element types (e.g., {type_annotation}[str])"
+        error_msg = f"Collection '{type_annotation}' must include element types (e.g., {type_annotation}[str])"
         raise InvalidTypeAnnotationError(error_msg)
 
     # Check for nested types in complex type annotations
@@ -466,6 +466,26 @@ def _check_for_bare_collection(tokens: list[str], i: int, token: str) -> None:
         raise InvalidTypeAnnotationError(error_msg)
 
 
+def _is_bare_collection_in_nested_type(token: str, tokens: list[str], i: int, bracket_stack: list[str]) -> bool:
+    """Check if a collection type is used without type arguments in a nested type.
+
+    Args:
+        token (str): The current token
+        tokens (list[str]): The list of all tokens
+        i (int): The current token index
+        bracket_stack (list[str]): The stack of open brackets
+
+    Returns:
+        bool: True if the collection is used without type arguments in a nested type
+    """
+    is_collection: bool = token in COLLECTIONS_REQUIRING_ARGS
+    has_brackets: bool = bool(bracket_stack)
+    has_next_token: bool = i < len(tokens) - 1
+    next_token_not_bracket: bool = tokens[i + 1] != OPEN_BRACKET if has_next_token else False
+
+    return bool(is_collection and has_brackets and has_next_token and next_token_not_bracket)
+
+
 def _check_tokens_for_collection_type_usage(tokens: list[str]) -> None:
     """Check tokens for proper collection type usage.
 
@@ -491,6 +511,11 @@ def _check_tokens_for_collection_type_usage(tokens: list[str]) -> None:
         # Handle closing brackets
         elif token in (CLOSE_BRACKET, CLOSE_PAREN, CLOSE_BRACE):
             _check_for_closing_bracket(token, bracket_stack, collection_stack)
+
+        # Check for bare collections in nested types
+        elif _is_bare_collection_in_nested_type(token, tokens, i, bracket_stack):
+            error_msg = f"Invalid nested type: collection type '{token}' requires element types"
+            raise InvalidTypeAnnotationError(error_msg)
 
     # Check for unclosed brackets at the end
     if bracket_stack:

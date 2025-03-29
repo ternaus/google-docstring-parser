@@ -19,9 +19,12 @@ This module provides functions to parse Google-style docstrings into structured 
 from __future__ import annotations
 
 import re
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from docstring_parser import parse
+
+if TYPE_CHECKING:
+    from docstring_parser.common import Docstring
 
 from google_docstring_parser.type_validation import (
     InvalidTypeAnnotationError,
@@ -369,61 +372,109 @@ def _parse_references(reference_content: str) -> list[dict[str, str]]:
     return references
 
 
-def _is_continuation_line(line: str, all_lines: list[str]) -> bool:
-    """Check if a line is a continuation of a previous line.
+def _validate_type_with_error_handling(type_str: str, result: dict[str, Any], collect_errors: bool) -> None:
+    """Validate a type annotation and handle any errors.
 
     Args:
-        line (str): The line to check
-        all_lines (list[str]): All lines in the section
-
-    Returns:
-        bool: True if the line is a continuation line, False otherwise
+        type_str (str): The type annotation to validate
+        result (dict[str, Any]): The result dictionary to add errors to
+        collect_errors (bool): Whether to collect errors or raise them
     """
-    line_index = all_lines.index(line)
-    if line_index == 0:
-        return False
+    try:
+        validate_type_annotation(type_str)
+        if "[" in type_str and "]" in type_str:
+            check_text_for_bare_collections(type_str)
+    except InvalidTypeAnnotationError as e:
+        if collect_errors:
+            result["errors"].append(str(e))
+        else:
+            raise
 
-    current_indent = len(line) - len(line.lstrip())
-    prev_line = all_lines[line_index - 1]
-    prev_indent = len(prev_line) - len(prev_line.lstrip())
 
-    return current_indent > prev_indent and not line.lstrip().startswith("-")
-
-
-def _process_args_section(args: list[dict[str, str | None]], *, validate_types: bool) -> None:
-    """Process the Args section of a docstring.
+def _process_args_with_validation(
+    sections: dict[str, str],
+    parsed: Docstring,
+    result: dict[str, Any],
+    validate_types: bool,
+    collect_errors: bool,
+) -> None:
+    """Process the Args section with type validation.
 
     Args:
-        args (list[dict[str, str | None]]): List of argument dictionaries
+        sections (dict[str, str]): The sections dictionary
+        parsed (Docstring): The parsed docstring object
+        result (dict[str, Any]): The result dictionary to update
         validate_types (bool): Whether to validate type annotations
-
-    Returns:
-        None
+        collect_errors (bool): Whether to collect errors or raise them
     """
-    if not validate_types:
+    if "Args" not in sections:
         return
 
-    # Validate type annotations and check for bare nested collections
+    args = [
+        {
+            "name": arg.arg_name.rstrip() if arg.arg_name is not None else None,
+            "type": arg.type_name.rstrip() if arg.type_name is not None else None,
+            "description": arg.description.rstrip() if arg.description is not None else None,
+        }
+        for arg in parsed.params
+    ]
+
+    if not args:
+        return
+
     for arg in args:
         if arg["type"] and validate_types:
-            validate_type_annotation(arg["type"])
-
-            # Check for nested types - if this is a complex type like Dict[str, List],
-            # the bare 'List' would be caught here
-            if "[" in arg["type"] and "]" in arg["type"]:
-                check_text_for_bare_collections(arg["type"])
+            _validate_type_with_error_handling(arg["type"], result, collect_errors)
+    result["Args"] = args
 
 
-def _process_returns_section(sections: dict[str, str], *, validate_types: bool) -> dict[str, str]:
-    """Process the Returns section of a docstring.
+def _process_returns_with_validation(
+    sections: dict[str, str],
+    result: dict[str, Any],
+    validate_types: bool,
+    collect_errors: bool,
+) -> None:
+    """Process the Returns section with type validation.
 
     Args:
-        sections (dict[str, str]): Dictionary of docstring sections
+        sections (dict[str, str]): The sections dictionary
+        result (dict[str, Any]): The result dictionary to update
         validate_types (bool): Whether to validate type annotations
-
-    Returns:
-        dict[str, str]: Dictionary containing 'type' and 'description' keys for the return value
+        collect_errors (bool): Whether to collect errors or raise them
     """
+    if "Returns" not in sections:
+        return
+
+    try:
+        returns = _process_returns_section(sections, validate_types=validate_types)
+        if isinstance(returns, dict) and returns.get("type") and validate_types:
+            _validate_type_with_error_handling(returns["type"], result, collect_errors)
+        result["Returns"] = returns
+    except InvalidTypeAnnotationError as e:
+        if collect_errors:
+            result["errors"].append(str(e))
+        else:
+            raise
+
+
+def _process_references_section(sections: dict[str, str], result: dict[str, Any]) -> None:
+    """Process the References section.
+
+    Args:
+        sections (dict[str, str]): The sections dictionary
+        result (dict[str, Any]): The result dictionary to update
+    """
+    for ref_section in ["References", "Reference"]:
+        if ref_section in sections:
+            # Reference errors should always be raised
+            result[ref_section] = _parse_references(sections[ref_section])
+            # Don't add this section to the general sections mapping later
+            sections.pop(ref_section, None)
+            break
+
+
+def _process_returns_section(sections: dict[str, str], *, validate_types: bool) -> dict[str, str] | str:
+    """Process the Returns section of a docstring."""
     if (
         "Returns" not in sections
         or not (returns_lines := sections["Returns"].split("\n"))
@@ -434,28 +485,33 @@ def _process_returns_section(sections: dict[str, str], *, validate_types: bool) 
     return_type = return_match[1]
     return_desc = return_match[2].strip()
 
-    # If type exists -> description must exist
-    # If type is None -> description must be empty
-    if (return_type and not return_desc) or (not return_type and return_desc):
-        return {}
+    # Special case: Returns section just contains "None"
+    if not return_type and return_desc == "None":
+        return "None"
 
+    # Validate type if present
     if return_type and validate_types:
-        # Validate the return type
         validate_type_annotation(return_type)
 
-        # Check for nested types in return type
+        # Check for nested types
         if "[" in return_type and "]" in return_type:
             check_text_for_bare_collections(return_type)
 
     return {"type": return_type, "description": return_desc.rstrip()}
 
 
-def parse_google_docstring(docstring: str, *, validate_types: bool = True) -> dict[str, Any]:
+def parse_google_docstring(
+    docstring: str,
+    *,
+    validate_types: bool = True,
+    collect_errors: bool = True,
+) -> dict[str, Any]:
     """Parse a Google-style docstring.
 
     Args:
         docstring (str): The docstring to parse
         validate_types (bool): Whether to validate type annotations
+        collect_errors (bool): Whether to collect errors in the result dictionary instead of raising them
 
     Returns:
         dict[str, Any]: Dictionary containing the parsed docstring information with the following keys:
@@ -463,16 +519,26 @@ def parse_google_docstring(docstring: str, *, validate_types: bool = True) -> di
             - Args (list[dict[str, str | None]], optional): List of argument dictionaries
             - Returns (dict[str, str], optional): Return type and description
             - References/Reference (list[dict[str, str]], optional): List of references
+            - errors (list[str], optional): List of validation errors if any (only if collect_errors is True)
             - Other sections are included as is
+
+    Raises:
+        InvalidTypeAnnotationError: If type validation is enabled and an invalid type is found
+            (only if collect_errors is False)
+        ReferenceFormatError: If a reference format is invalid
     """
     if not docstring:
         return {}
 
+    # Initialize result dictionary with description and errors if needed
+    result: dict[str, Any] = {
+        "Description": "",
+    }
+    if collect_errors:
+        result["errors"] = []
+
     # Clean up the docstring
     docstring = docstring.strip()
-
-    # Initialize result dictionary with only description
-    result: dict[str, Any] = {"Description": ""}
 
     # Extract sections and parse docstring
     sections = _extract_sections(docstring)
@@ -482,35 +548,26 @@ def parse_google_docstring(docstring: str, *, validate_types: bool = True) -> di
     if parsed.description:
         result["Description"] = parsed.description.rstrip()
 
-    # Process args (only if present)
-    if "Args" in sections and (
-        args := [
-            {
-                "name": arg.arg_name.rstrip() if arg.arg_name is not None else None,
-                "type": arg.type_name.rstrip() if arg.type_name is not None else None,
-                "description": arg.description.rstrip() if arg.description is not None else None,
-            }
-            for arg in parsed.params
-        ]
-    ):
-        _process_args_section(args, validate_types=validate_types)
-        result["Args"] = args
+    # Process args with validation
+    _process_args_with_validation(sections, parsed, result, validate_types, collect_errors)
 
-    # Process returns only if present
-    if "Returns" in sections:
-        result["Returns"] = _process_returns_section(sections, validate_types=validate_types)
+    # Process returns with validation
+    _process_returns_with_validation(sections, result, validate_types, collect_errors)
 
     # Process references section
-    for ref_section in ["References", "Reference"]:
-        if ref_section in sections:
-            result[ref_section] = _parse_references(sections[ref_section])
-            # Don't add this section to the general sections mapping later
-            sections.pop(ref_section, None)
-            break
+    _process_references_section(sections, result)
 
     # Add other sections directly using dict union
-    return result | {
-        section: content.rstrip()
-        for section, content in sections.items()
-        if section not in ["Description", "Args", "Returns"]
-    }
+    result.update(
+        {
+            section: content.rstrip()
+            for section, content in sections.items()
+            if section not in ["Description", "Args", "Returns"]
+        },
+    )
+
+    # Remove errors key if no errors
+    if collect_errors and not result["errors"]:
+        del result["errors"]
+
+    return result

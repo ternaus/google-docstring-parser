@@ -26,8 +26,9 @@ from google_docstring_parser.type_validation import InvalidTypeAnnotationError
 ])
 def test_invalid_nested_types(docstring: str) -> None:
     """Test that invalid nested types are properly caught."""
-    with pytest.raises(InvalidTypeAnnotationError):
-        parse_google_docstring(docstring)
+    result = parse_google_docstring(docstring)
+    assert "errors" in result
+    assert any("invalid nested type" in error.lower() for error in result["errors"])
 
 
 @pytest.mark.parametrize("docstring", [
@@ -60,8 +61,9 @@ def test_invalid_nested_types(docstring: str) -> None:
 ])
 def test_mixed_valid_invalid_types(docstring: str) -> None:
     """Test docstrings with both valid and invalid type annotations."""
-    with pytest.raises(InvalidTypeAnnotationError):
-        parse_google_docstring(docstring)
+    result = parse_google_docstring(docstring)
+    assert "errors" in result
+    assert any("collection" in error.lower() for error in result["errors"])
 
 
 def test_none_type_handling() -> None:
@@ -90,8 +92,9 @@ def test_none_type_handling() -> None:
 ])
 def test_invalid_case_sensitivity(docstring: str) -> None:
     """Test that invalid type validation is case-sensitive."""
-    with pytest.raises(InvalidTypeAnnotationError):
-        parse_google_docstring(docstring)
+    result = parse_google_docstring(docstring)
+    assert "errors" in result
+    assert any("collection" in error.lower() for error in result["errors"])
 
 
 @pytest.mark.parametrize("docstring", [
@@ -157,11 +160,12 @@ def test_string_literal_handling(docstring: str) -> None:
 ])
 def test_union_type_handling(docstring: str, should_raise: bool) -> None:
     """Test that Union types are properly validated."""
+    result = parse_google_docstring(docstring)
     if should_raise:
-        with pytest.raises(InvalidTypeAnnotationError):
-            parse_google_docstring(docstring)
+        assert "errors" in result
+        assert any("collection" in error.lower() for error in result["errors"])
     else:
-        parse_google_docstring(docstring)
+        assert "errors" not in result or not result["errors"]
 
 
 def test_docstring_without_types() -> None:

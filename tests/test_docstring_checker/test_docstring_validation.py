@@ -10,6 +10,7 @@ from tools.check_docstrings import (
     validate_docstring,
     check_param_types,
     get_docstrings,
+    check_returns_type,
 )
 from google_docstring_parser.google_docstring_parser import parse_google_docstring
 
@@ -223,3 +224,55 @@ def test_parse_google_docstring(docstring: str, expected_args_count: int, expect
     # Check returns count
     returns = parsed.get("Returns", [])
     assert len(returns) == expected_returns_count
+
+
+@pytest.mark.parametrize(
+    "docstring_dict,expected_errors",
+    [
+        # No Returns section
+        ({"description": "A docstring without returns"}, []),
+
+        # Valid None return
+        ({"description": "A docstring with None return", "Returns": "None"}, []),
+
+        # Valid return with type
+        (
+            {
+                "description": "A docstring with typed return",
+                "Returns": {"type": "bool", "description": "Success flag"},
+            },
+            [],
+        ),
+
+        # Invalid return format (not None or dict)
+        (
+            {
+                "description": "A docstring with invalid return format",
+                "Returns": "some string that's not None",
+            },
+            ["Returns section must be either 'None' or have a type annotation"],
+        ),
+
+        # Missing type in return dict
+        (
+            {
+                "description": "A docstring with missing return type",
+                "Returns": {"description": "Success flag"},
+            },
+            ["Returns section is missing type annotation"],
+        ),
+
+        # Return as list (invalid)
+        (
+            {
+                "description": "A docstring with list return",
+                "Returns": ["some", "list"],
+            },
+            ["Returns section must be either 'None' or have a type annotation"],
+        ),
+    ],
+)
+def test_check_returns_type(docstring_dict: dict[str, Any], expected_errors: list[str]) -> None:
+    """Test the check_returns_type function with various docstring dictionaries."""
+    errors = check_returns_type(docstring_dict)
+    assert errors == expected_errors

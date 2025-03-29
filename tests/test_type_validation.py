@@ -195,10 +195,10 @@ def test_parse_google_docstring_type_validation(docstring: str, should_raise: bo
     """Test that parse_google_docstring properly validates type annotations."""
     if should_raise:
         with pytest.raises(InvalidTypeAnnotationError):
-            parse_google_docstring(docstring)
+            parse_google_docstring(docstring, collect_errors=False)
     else:
-        # Should parse without raising
-        parse_google_docstring(docstring)
+        result = parse_google_docstring(docstring, collect_errors=False)
+        assert "errors" not in result
 
 
 def test_error_message_content() -> None:
