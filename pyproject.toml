@@ -5,7 +5,7 @@ requires = [ "setuptools>=45", "wheel" ]
 
 [project]
 name = "google-docstring-parser"
-version = "0.0.6"
+version = "0.0.7"
 
 description = "A lightweight, efficient parser for Google-style Python docstrings that converts them into structured dictionaries."
 readme = "README.md"
@@ -107,6 +107,7 @@ lint.ignore = [
   "D107",
   "EM101",
   "EM102",
+  "FBT001",
 ]
 
 # Allow fix for all enabled rules (when `--fix`) is provided.
@@ -117,7 +118,6 @@ lint.per-file-ignores = { "__init__.py" = [
 ], "tools/*.py" = [
   "T201",
   "BLE001",
-  "FBT001",
   "FBT002",
   "ANN201",
 ] }

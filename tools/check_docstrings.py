@@ -268,23 +268,20 @@ def check_returns_section_name(docstring: str) -> list[str]:
 
 
 def check_returns_type(docstring_dict: dict[str, Any]) -> list[str]:
-    """Check Returns type in a docstring.
-
-    Args:
-        docstring_dict (dict[str, Any]): Parsed docstring dictionary
-
-    Returns:
-        list[str]: List of error messages for invalid return types
-    """
+    """Check Returns type in a docstring."""
     errors = []
-    if docstring_dict.get("Returns"):
-        returns = docstring_dict["Returns"]
+    if returns := docstring_dict.get("Returns"):
         # Special case: Returns section just contains "None"
         if isinstance(returns, str) and returns.strip() == "None":
             return errors
 
-        if isinstance(returns, dict) and not returns.get("type"):
+        if not isinstance(returns, dict):
+            errors.append("Returns section must be either 'None' or have a type annotation")
+            return errors
+
+        if not returns.get("type"):
             errors.append("Returns section is missing type annotation")
+
     return errors
 
 
