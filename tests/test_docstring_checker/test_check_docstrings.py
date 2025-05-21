@@ -489,3 +489,59 @@ require_param_types = true
     assert "src" in result.stdout and "file.py" in result.stdout, f"Error should be from src/file.py, got stdout: {result.stdout}, stderr: {result.stderr}"
     assert "other.py" not in result.stdout, "Error should not include other.py"
     assert "Parameter 'param1' is missing a type" in result.stdout, "Should detect missing parameter type"
+
+
+def test_empty_paths_list(tmp_path: Path) -> None:
+    """Test that explicitly setting empty paths list in pyproject.toml behaves the same as no paths.
+
+    Args:
+        tmp_path (Path): Temporary directory fixture
+    """
+    # Create a dummy Python file that would cause errors if checked
+    test_file = tmp_path / "test_file.py"
+    test_file.write_text('''
+def missing_docstring_function(param1):
+    # This function has no docstring and would fail checks
+    return None
+''')
+
+    # Create a pyproject.toml with an explicit empty paths list
+    empty_pyproject = tmp_path / "pyproject.toml"
+    empty_pyproject.write_text('''
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.docstring_checker]
+paths = []
+''')
+
+    # Get the path to the module we're testing
+    project_root = Path(__file__).parent.parent.parent
+    tools_module = project_root / "tools" / "check_docstrings.py"
+
+    # Set up environment so imports work
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(project_root)
+
+    # Run the checker with the configuration
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(tools_module),
+            "--verbose",
+        ],
+        cwd=str(tmp_path),
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+    # Check that the command succeeds (exits with code 0)
+    assert result.returncode == 0, f"Checker should succeed when empty paths list is specified, got stdout: {result.stdout}, stderr: {result.stderr}"
+
+    # Check that the output contains the expected message
+    assert "No paths specified for checking" in result.stdout, "Should show message about no paths specified"
+
+    # Check that it shows the empty paths in the configuration output
+    assert "Paths: []" in result.stdout, "Should show empty paths list in configuration"
