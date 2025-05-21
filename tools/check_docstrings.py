@@ -22,7 +22,7 @@ from google_docstring_parser.google_docstring_parser import (
 
 # Default configuration
 DEFAULT_CONFIG = {
-    "paths": ["."],
+    "paths": [],  # Empty by default, so no directories are scanned unless explicitly specified
     "require_param_types": False,
     "check_references": True,
     "exclude_files": [],
@@ -702,6 +702,14 @@ def main() -> None:
         print(f"  Require parameter types: {require_param_types}")
         print(f"  Check references: {check_references}")
         print(f"  Exclude files: {exclude_files}")
+
+    # Check if paths is empty
+    if not paths:
+        print(
+            "No paths specified for checking. Please specify paths as command line "
+            "arguments or configure them in pyproject.toml under [tool.docstring_checker] section.",
+        )
+        sys.exit(0)
 
     if all_errors := _process_paths(
         paths,

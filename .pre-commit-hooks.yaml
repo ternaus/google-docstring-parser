@@ -2,7 +2,10 @@
   name: Check Google-style docstrings can be parsed
   description: >
     Checks that Google-style docstrings in specified folders can be parsed with google_docstring_parser.
-    Configured via pyproject.toml under [tool.docstring_checker] section.
+    IMPORTANT: You MUST configure paths in pyproject.toml under [tool.docstring_checker] section,
+    otherwise no files will be checked. For example:
+    [tool.docstring_checker]
+    paths = ["your_package", "your_module"]
   entry: python -m tools.check_docstrings
   language: python
   types: [python]
