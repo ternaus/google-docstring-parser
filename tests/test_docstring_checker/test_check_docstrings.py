@@ -484,6 +484,8 @@ require_param_types = true
     assert result.returncode == 1, f"Checker should fail when errors are found, output: {result.stdout}, error: {result.stderr}"
 
     # The error should be about the file in src, not the one outside
-    assert "src/file.py" in result.stdout, f"Error should be from src/file.py, got stdout: {result.stdout}, stderr: {result.stderr}"
+    # Use os.path.join to create a platform-specific path for comparison
+    # or check for path components separately to be platform-agnostic
+    assert "src" in result.stdout and "file.py" in result.stdout, f"Error should be from src/file.py, got stdout: {result.stdout}, stderr: {result.stderr}"
     assert "other.py" not in result.stdout, "Error should not include other.py"
     assert "Parameter 'param1' is missing a type" in result.stdout, "Should detect missing parameter type"
