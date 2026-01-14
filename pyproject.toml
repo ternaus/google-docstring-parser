@@ -5,7 +5,7 @@ requires = [ "setuptools>=45", "wheel" ]
 
 [project]
 name = "google-docstring-parser"
-version = "0.0.8"
+version = "0.0.9"
 
 description = "A lightweight, efficient parser for Google-style Python docstrings that converts them into structured dictionaries."
 readme = "README.md"
@@ -14,7 +14,7 @@ license = { text = "Custom License - See LICENSE file for details" }
 maintainers = [ { name = "Vladimir Iglovikov" } ]
 
 authors = [ { name = "Vladimir Iglovikov" } ]
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 
 classifiers = [
   "Development Status :: 5 - Production/Stable",
@@ -24,11 +24,11 @@ classifiers = [
   "Operating System :: OS Independent",
   "Programming Language :: Python",
   "Programming Language :: Python :: 3 :: Only",
-  "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Topic :: Scientific/Engineering :: Artificial Intelligence",
   "Topic :: Software Development :: Documentation",
   "Topic :: Software Development :: Libraries",
@@ -38,7 +38,6 @@ classifiers = [
 
 dependencies = [
   "docstring-parser>=0.16",
-  "typing-extensions>=4.9; python_version<'3.10'",
 ]
 
 optional-dependencies.dev = [
@@ -50,19 +49,19 @@ optional-dependencies.dev = [
 packages = [ "google_docstring_parser", "tools" ]
 
 [tool.setuptools.package-data]
-google_docstring_parser = [ "*.md" ]
+google_docstring_parser = [ "*.md", "py.typed" ]
 
 [tool.setuptools.exclude-package-data]
 "*" = [ "tests*" ]
 
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.
-target-version = "py39"
+target-version = "py310"
 
 line-length = 120
 indent-width = 4
 
-# Assume Python 3.9
+# Assume Python 3.10
 exclude = [
   ".bzr",
   ".cursor",
@@ -130,7 +129,7 @@ lint.dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 lint.pydocstyle.convention = "google"
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.10"
 ignore_missing_imports = true
 follow_imports = "silent"
 warn_redundant_casts = true
