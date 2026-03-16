@@ -13,6 +13,8 @@ paths = ["google_docstring_parser", "tools"]
 require_param_types = true
 check_references = true
 check_type_consistency = true
+min_short_description_length = 50
+max_short_description_length = 160  # SEO meta description; 0 to disable
 exclude_files = ["test_malformed_docstrings.py"]
 ```
 
@@ -42,6 +44,11 @@ exclude_files = ["test_malformed_docstrings.py"]
   ```
 - Each reference needs non-empty `description` and `source` (colon-separated).
 
+### Short description
+- Short description = first paragraph (up to first blank line). Multi-line first para joined with spaces.
+- Use several sentences for meta descriptions. SEO: 120-160 chars recommended.
+- `min_short_description_length` / `max_short_description_length` enforce bounds (0 to disable).
+
 ### Type validation
 - `dict`, `list`, `set`, `tuple`, etc. require brackets: `list[str]`, `dict[str, int]`
 - No unclosed parentheses in param types
@@ -56,6 +63,8 @@ exclude_files = ["test_malformed_docstrings.py"]
 | `missing_dash` / `dash_in_single` | Single ref: no dash. Multiple refs: all start with `-` |
 | `Invalid section name 'return:'` | Use `Returns:` |
 | `Returns section is missing type annotation` | Add type before colon in Returns |
+| `Short description too short` | Add more text to first paragraph (up to blank line) |
+| `Short description too long` | Trim first paragraph; aim for 120-160 chars for SEO |
 
 ## Verify
 

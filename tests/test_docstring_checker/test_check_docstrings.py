@@ -10,6 +10,7 @@ import pytest
 
 from tools.check_docstrings import (
     _config_keys_match,
+    _extract_short_description,
     check_short_description_length,
 )
 
@@ -161,7 +162,8 @@ def test_config_from_pyproject_toml() -> None:
     assert "Exclude files: ['test_malformed_docstrings.py']" in result.stdout, "Should read exclude_files from pyproject.toml"
 
     # Check that it reads min_short_description_length from pyproject.toml
-    assert "Min short description length: 50" in result.stdout, "Should read min_short_description_length from pyproject.toml"
+    assert "Min short description length: 50" in result.stdout
+    assert "Max short description length:" in result.stdout
 
 
 def test_missing_param_types_in_real_code() -> None:
@@ -589,49 +591,245 @@ paths = []
 
 
 @pytest.mark.parametrize(
-    "parsed,min_length,expected_errors",
+    "description,expected",
+    [
+        ("", ""),
+        ("One line.", "One line."),
+        ("First line.\n\nSecond para.", "First line."),
+        ("Line one.\nLine two.\n\nSecond para.", "Line one. Line two."),
+        # Multiple blank lines between paragraphs
+        ("Para one.\n\n\n\nPara two.", "Para one."),
+        # Whitespace-only line counts as blank
+        ("Para one.\n   \n\t\nPara two.", "Para one."),
+        # Single newline (no blank) - same paragraph
+        ("Line one.\nLine two.", "Line one. Line two."),
+        # Leading/trailing whitespace stripped
+        ("  \n  First para.  \n\n  Second.", "First para."),
+        ("  Only line.  ", "Only line."),
+        # Multiple sentences in first paragraph
+        (
+            "First sentence. Second sentence. Third sentence.\n\nMore below.",
+            "First sentence. Second sentence. Third sentence.",
+        ),
+        # Tab and mixed whitespace normalized to single space
+        ("Word1\t\tWord2\nWord3", "Word1 Word2 Word3"),
+        # Empty after strip
+        ("   \n\n   ", ""),
+        # Only first paragraph when multiple
+        (
+            "A. B. C.\n\nD. E.\n\nF.",
+            "A. B. C.",
+        ),
+    ],
+)
+def test_extract_short_description(description: str, expected: str) -> None:
+    """Test that short description is first paragraph (up to first blank line)."""
+    assert _extract_short_description(description) == expected
+
+
+@pytest.mark.parametrize(
+    "parsed,min_length,max_length,expected_errors",
     [
         (
             {"Description": "Short."},
             50,
+            0,
             ["Short description too short (6 chars, min 50): 'Short.'"],
         ),
         (
             {"Description": "A" * 49},
             50,
+            0,
             ["Short description too short (49 chars, min 50): 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'"],
         ),
-        ({"Description": "A" * 50}, 50, []),
-        ({"Description": "A" * 60}, 50, []),
-        ({"Description": ""}, 50, []),
-        ({}, 50, []),
-        ({"Description": "Short."}, 0, []),
-        ({"Description": "Short."}, 5, []),
-        ({"Description": "Short."}, 6, []),
+        ({"Description": "A" * 50}, 50, 0, []),
+        ({"Description": "A" * 60}, 50, 0, []),
+        ({"Description": ""}, 50, 0, []),
+        ({}, 50, 0, []),
+        ({"Description": "Short."}, 0, 0, []),
+        ({"Description": "Short."}, 5, 0, []),
+        ({"Description": "Short."}, 6, 0, []),
         (
             {"Description": "Short."},
             7,
+            0,
             ["Short description too short (6 chars, min 7): 'Short.'"],
         ),
         (
             {"Description": "First line.\n\nSecond paragraph."},
             50,
+            0,
             ["Short description too short (11 chars, min 50): 'First line.'"],
+        ),
+        # First paragraph = up to blank line (multi-line)
+        (
+            {"Description": "First line. More.\nSecond line of para.\n\nSecond para."},
+            0,
+            0,
+            [],
+        ),
+        # Max length with multi-line first paragraph (joined with spaces)
+        (
+            {
+                "Description": (
+                    "Line one with some text.\n"
+                    "And another line that pushes length over max.\n\n"
+                    "Next paragraph."
+                )
+            },
+            0,
+            60,
+            [
+                "Short description too long (70 chars, max 60): "
+                "'Line one with some text. And another line that pus...'"
+            ],
+        ),
+        # Max length (single-line)
+        (
+            {"Description": "A" * 161},
+            0,
+            160,
+            ["Short description too long (161 chars, max 160): 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...'"],
+        ),
+        ({"Description": "A" * 160}, 0, 160, []),
+        ({"Description": "A" * 50}, 50, 160, []),
+        (
+            {"Description": "Short."},
+            50,
+            5,
+            [
+                "Short description too short (6 chars, min 50): 'Short.'",
+                "Short description too long (6 chars, max 5): 'Short.'",
+            ],
         ),
     ],
 )
 def test_check_short_description_length(
-    parsed: dict[str, Any], min_length: int, expected_errors: list[str]
+    parsed: dict[str, Any],
+    min_length: int,
+    max_length: int,
+    expected_errors: list[str],
 ) -> None:
     """Test that check_short_description_length validates correctly.
 
     Args:
         parsed (dict): Parsed docstring dict with Description key
         min_length (int): Minimum length threshold
+        max_length (int): Maximum length threshold (0 to disable)
         expected_errors (list[str]): Expected error messages
     """
-    result = check_short_description_length(parsed, min_length)
+    result = check_short_description_length(parsed, min_length, max_length)
     assert result == expected_errors
+
+
+@pytest.mark.parametrize(
+    "code,min_len,max_len,expected_returncode,expected_in_output",
+    [
+        # Short description too short - fails ("X." = 2 chars < min 5)
+        (
+            '''
+"""Test module."""
+
+def foo():
+    """X.
+
+    Returns:
+        None
+    """
+    pass
+''',
+            5,
+            0,
+            1,
+            "Short description too short",
+        ),
+        # Short description OK (multi-line first para)
+        (
+            '''
+"""Test module."""
+
+def foo():
+    """First sentence. Second sentence for more context. Third sentence if needed.
+
+    Returns:
+        None
+    """
+    pass
+''',
+            50,
+            160,
+            0,
+            "",
+        ),
+        # Short description too long - fails (6 chars > max 5)
+        (
+            '''
+"""Test module."""
+
+def foo():
+    """Short.
+
+    Returns:
+        None
+    """
+    pass
+''',
+            0,
+            5,
+            1,
+            "Short description too long",
+        ),
+        # First paragraph = up to blank line (52 chars, min 50)
+        (
+            '''
+"""Test module."""
+
+def foo():
+    """First line. Second line. Third line. More text here.
+
+    Returns:
+        None
+    """
+    pass
+''',
+            50,
+            160,
+            0,
+            "",
+        ),
+    ],
+)
+def test_short_description_integration(
+    code: str,
+    min_len: int,
+    max_len: int,
+    expected_returncode: int,
+    expected_in_output: str,
+    tmp_path: Path,
+) -> None:
+    """Test short description length in full check_file flow."""
+
+    def run_check() -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "tools.check_docstrings",
+                str(tmp_path / "test.py"),
+                "--min-short-description-length",
+                str(min_len),
+                "--max-short-description-length",
+                str(max_len),
+            ],
+            capture_output=True,
+            text=True,
+        )
+
+    (tmp_path / "test.py").write_text(code)
+    result = run_check()
+    assert result.returncode == expected_returncode
+    if expected_in_output:
+        assert expected_in_output in result.stdout
 
 
 @pytest.mark.parametrize(

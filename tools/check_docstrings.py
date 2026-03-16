@@ -30,6 +30,7 @@ DEFAULT_CONFIG = {
     "check_references": True,
     "check_type_consistency": False,
     "min_short_description_length": 0,
+    "max_short_description_length": 0,  # 160 recommended for SEO meta descriptions
     "exclude_files": [],
     "verbose": False,
 }
@@ -47,6 +48,7 @@ class DocstringContext(NamedTuple):
         check_references (bool): Whether to check references for errors
         check_type_consistency (bool): Whether to compare docstring types with annotations
         min_short_description_length (int): Minimum length for short description
+        max_short_description_length (int): Maximum length for short description (0 to disable)
         node (ast.AST | None): AST node for the function or class
 
     Returns:
@@ -61,6 +63,7 @@ class DocstringContext(NamedTuple):
     check_references: bool = True
     check_type_consistency: bool = False
     min_short_description_length: int = 0
+    max_short_description_length: int = 0
     node: ast.AST | None = None
 
 
@@ -70,6 +73,7 @@ _CONFIG_KEYS: dict[str, tuple[str, type]] = {
     "check_references": ("check_references", bool),
     "check_type_consistency": ("check_type_consistency", bool),
     "min_short_description_length": ("min_short_description_length", int),
+    "max_short_description_length": ("max_short_description_length", int),
     "exclude_files": ("exclude_files", list),
     "verbose": ("verbose", bool),
 }
@@ -391,33 +395,69 @@ def check_returns_section_name(docstring: str) -> list[str]:
     return errors
 
 
-def check_short_description_length(parsed: dict[str, Any], min_length: int) -> list[str]:
-    """Check that the short description meets the minimum length requirement.
+def _extract_short_description(description: str) -> str:
+    r"""Extract short description: first paragraph (up to first blank line), normalized.
+
+    Leading and trailing whitespace (including blank lines) are stripped before
+    paragraph detection. Splits on one or more blank lines (\\n\\s*\\n), takes
+    the first part, then normalizes internal whitespace (tabs, newlines, multiple
+    spaces) to single spaces. Joins multi-line first paragraph for meta description use.
+
+    Args:
+        description (str): Full description text
+
+    Returns:
+        str: First paragraph as single line, or empty string
+    """
+    if not description:
+        return ""
+    parts = re.split(r"\n\s*\n", description.strip())
+    first_para = parts[0].strip() if parts else ""
+    return " ".join(first_para.split()) if first_para else ""
+
+
+def check_short_description_length(
+    parsed: dict[str, Any],
+    min_length: int,
+    max_length: int = 0,
+) -> list[str]:
+    """Check that the short description meets length requirements.
+
+    Short description is the first paragraph (up to first blank line).
+    SEO: 120-160 chars recommended for meta descriptions.
 
     Args:
         parsed (dict[str, Any]): Parsed docstring dictionary
-        min_length (int): Minimum length for short description (0 to disable)
+        min_length (int): Minimum length (0 to disable)
+        max_length (int): Maximum length (0 to disable)
 
     Returns:
-        list[str]: List of error messages for short descriptions that are too short
+        list[str]: List of error messages for length violations
     """
-    if min_length <= 0:
-        return []
-
-    short_desc = (parsed.get("Description") or "").split("\n")[0].strip()
+    short_desc = _extract_short_description(parsed.get("Description") or "")
     if not short_desc:
         return []
 
-    if len(short_desc) < min_length:
+    errors: list[str] = []
+    if min_length > 0 and len(short_desc) < min_length:
         preview = (
             short_desc[:SHORT_DESC_PREVIEW_LENGTH] + "..."
             if len(short_desc) > SHORT_DESC_PREVIEW_LENGTH
             else short_desc
         )
-        return [
+        errors.append(
             f"Short description too short ({len(short_desc)} chars, min {min_length}): '{preview}'",
-        ]
-    return []
+        )
+    if max_length > 0 and len(short_desc) > max_length:
+        preview = (
+            short_desc[:SHORT_DESC_PREVIEW_LENGTH] + "..."
+            if len(short_desc) > SHORT_DESC_PREVIEW_LENGTH
+            else short_desc
+        )
+        errors.append(
+            f"Short description too long ({len(short_desc)} chars, max {max_length}): '{preview}'",
+        )
+    return errors
 
 
 def check_returns_type(docstring_dict: dict[str, Any]) -> list[str]:
@@ -591,12 +631,13 @@ def _check_additional_validations(context: DocstringContext, parsed: dict[str, A
         )
         errors.extend(ref_errors)
 
-    if context.min_short_description_length > 0:
+    if context.min_short_description_length > 0 or context.max_short_description_length > 0:
         length_errors, _ = safe_execute(
             context,
             check_short_description_length,
             parsed,
             context.min_short_description_length,
+            context.max_short_description_length,
             error_prefix="Error checking short description length",
         )
         errors.extend(length_errors)
@@ -661,6 +702,7 @@ def check_file(
     check_references: bool = True,
     check_type_consistency: bool = False,
     min_short_description_length: int = 0,
+    max_short_description_length: int = 0,
 ) -> list[str]:
     """Check docstrings in a Python file for parsing and validation errors.
 
@@ -671,6 +713,7 @@ def check_file(
         check_references (bool): Whether to check references for errors
         check_type_consistency (bool): Whether to compare docstring types with annotations
         min_short_description_length (int): Minimum length for short description (0 to disable)
+        max_short_description_length (int): Maximum length for short description (0 to disable)
 
     Returns:
         list[str]: List of error messages
@@ -699,6 +742,7 @@ def check_file(
             check_references=check_references,
             check_type_consistency=check_type_consistency,
             min_short_description_length=min_short_description_length,
+            max_short_description_length=max_short_description_length,
             node=node,
         )
         errors.extend(_process_docstring(context, docstring))
@@ -714,6 +758,7 @@ def scan_directory(
     check_references: bool = True,
     check_type_consistency: bool = False,
     min_short_description_length: int = 0,
+    max_short_description_length: int = 0,
 ) -> list[str]:
     """Scan a directory for Python files and check their docstrings.
 
@@ -725,6 +770,7 @@ def scan_directory(
         check_references (bool): Whether to check references for errors
         check_type_consistency (bool): Whether to compare docstring types with annotations
         min_short_description_length (int): Minimum length for short description (0 to disable)
+        max_short_description_length (int): Maximum length for short description (0 to disable)
 
     Returns:
         list[str]: List of error messages
@@ -755,6 +801,7 @@ def scan_directory(
                     check_references,
                     check_type_consistency,
                     min_short_description_length,
+                    max_short_description_length,
                 ),
             )
     return errors
@@ -813,13 +860,19 @@ def _parse_args() -> argparse.Namespace:
         metavar="N",
         help="Minimum length for short description (0 to disable)",
     )
+    parser.add_argument(
+        "--max-short-description-length",
+        type=int,
+        metavar="N",
+        help="Maximum length for short description (0 to disable, 160 recommended for SEO)",
+    )
     return parser.parse_args()
 
 
 def _get_config_values(
     args: argparse.Namespace,
     config: dict[str, Any],
-) -> tuple[list[str], bool, bool, bool, bool, int, list[str]]:
+) -> tuple[list[str], bool, bool, bool, bool, int, int, list[str]]:
     """Get configuration values from command line arguments and config file.
 
     Args:
@@ -827,13 +880,14 @@ def _get_config_values(
         config (dict[str, Any]): Configuration dictionary
 
     Returns:
-        tuple[list[str], bool, bool, bool, bool, int, list[str]]: Tuple containing:
+        tuple[list[str], bool, bool, bool, bool, int, int, list[str]]: Tuple containing:
             - List of paths to check
             - Whether to require parameter types
             - Whether to enable verbose output
             - Whether to check references
             - Whether to check type consistency
             - Minimum short description length
+            - Maximum short description length
             - List of files to exclude
     """
     # Get paths
@@ -873,6 +927,11 @@ def _get_config_values(
     if args.min_short_description_length is not None:
         min_short_description_length = args.min_short_description_length
 
+    # Get max_short_description_length - CLI overrides config
+    max_short_description_length = config.get("max_short_description_length", 0)
+    if args.max_short_description_length is not None:
+        max_short_description_length = args.max_short_description_length
+
     return (
         paths,
         require_param_types,
@@ -880,6 +939,7 @@ def _get_config_values(
         check_references,
         check_type_consistency,
         min_short_description_length,
+        max_short_description_length,
         exclude_files,
     )
 
@@ -892,6 +952,7 @@ def _process_paths(
     check_references: bool,
     check_type_consistency: bool,
     min_short_description_length: int,
+    max_short_description_length: int,
 ) -> list[str]:
     """Process paths and check docstrings in each file or directory.
 
@@ -903,6 +964,7 @@ def _process_paths(
         check_references (bool): Whether to check references for errors
         check_type_consistency (bool): Whether to compare docstring types with annotations
         min_short_description_length (int): Minimum length for short description (0 to disable)
+        max_short_description_length (int): Maximum length for short description (0 to disable)
 
     Returns:
         list[str]: List of error messages
@@ -919,6 +981,7 @@ def _process_paths(
                 check_references,
                 check_type_consistency,
                 min_short_description_length,
+                max_short_description_length,
             )
             all_errors.extend(errors)
         elif path.is_file() and path.suffix == ".py":
@@ -929,6 +992,7 @@ def _process_paths(
                 check_references,
                 check_type_consistency,
                 min_short_description_length,
+                max_short_description_length,
             )
             all_errors.extend(errors)
         else:
@@ -956,6 +1020,7 @@ def main() -> None:
         check_references,
         check_type_consistency,
         min_short_description_length,
+        max_short_description_length,
         exclude_files,
     ) = _get_config_values(args, config)
 
@@ -967,6 +1032,7 @@ def main() -> None:
         print(f"  Check references: {check_references}")
         print(f"  Check type consistency: {check_type_consistency}")
         print(f"  Min short description length: {min_short_description_length}")
+        print(f"  Max short description length: {max_short_description_length}")
         print(f"  Exclude files: {exclude_files}")
 
     # Check if paths is empty
@@ -985,6 +1051,7 @@ def main() -> None:
         check_references,
         check_type_consistency,
         min_short_description_length,
+        max_short_description_length,
     ):
         for error in all_errors:
             print(error)

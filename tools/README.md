@@ -46,8 +46,11 @@ check_references = true
 # Whether to compare docstring types with function annotations
 check_type_consistency = true
 
+# Short description = first paragraph (up to first blank line). SEO: 120-160 chars recommended.
 # Minimum short description length (0 to disable)
 min_short_description_length = 0
+# Maximum short description length (0 to disable, 160 recommended for meta descriptions)
+max_short_description_length = 0
 
 # List of filenames to exclude from checks
 # These can be just filenames (e.g., "conftest.py") or paths ending with the filename
@@ -103,6 +106,7 @@ require_param_types = true
 check_references = true
 check_type_consistency = true
 min_short_description_length = 0
+max_short_description_length = 0
 exclude_files = ["conftest.py", "__init__.py"]
 verbose = false
 ```
@@ -131,5 +135,6 @@ Command line options:
 - `--check-type-consistency`: Compare docstring types with function annotations
 - `--no-check-type-consistency`: Skip type consistency checking
 - `--min-short-description-length N`: Minimum short description length (0 to disable)
+- `--max-short-description-length N`: Maximum short description length (0 to disable, 160 for SEO)
 - `--exclude-files`: Comma-separated list of filenames to exclude
 - `-v, --verbose`: Enable verbose output
