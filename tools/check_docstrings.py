@@ -396,9 +396,12 @@ def check_returns_section_name(docstring: str) -> list[str]:
 
 
 def _extract_short_description(description: str) -> str:
-    """Extract short description: first paragraph (up to first blank line), normalized.
+    r"""Extract short description: first paragraph (up to first blank line), normalized.
 
-    Joins multi-line first paragraph with spaces for meta description use.
+    Leading and trailing whitespace (including blank lines) are stripped before
+    paragraph detection. Splits on one or more blank lines (\\n\\s*\\n), takes
+    the first part, then normalizes internal whitespace (tabs, newlines, multiple
+    spaces) to single spaces. Joins multi-line first paragraph for meta description use.
 
     Args:
         description (str): Full description text

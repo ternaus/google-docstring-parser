@@ -668,7 +668,23 @@ def test_extract_short_description(description: str, expected: str) -> None:
             0,
             [],
         ),
-        # Max length
+        # Max length with multi-line first paragraph (joined with spaces)
+        (
+            {
+                "Description": (
+                    "Line one with some text.\n"
+                    "And another line that pushes length over max.\n\n"
+                    "Next paragraph."
+                )
+            },
+            0,
+            60,
+            [
+                "Short description too long (70 chars, max 60): "
+                "'Line one with some text. And another line that pus...'"
+            ],
+        ),
+        # Max length (single-line)
         (
             {"Description": "A" * 161},
             0,
@@ -702,9 +718,6 @@ def test_check_short_description_length(
         max_length (int): Maximum length threshold (0 to disable)
         expected_errors (list[str]): Expected error messages
     """
-    # Handle parametrize passing string for the invalid test case
-    if isinstance(parsed, str):
-        parsed = {"Description": parsed}
     result = check_short_description_length(parsed, min_length, max_length)
     assert result == expected_errors
 
