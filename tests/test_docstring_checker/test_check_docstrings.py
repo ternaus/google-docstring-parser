@@ -8,7 +8,36 @@ from typing import Any
 
 import pytest
 
-from tools.check_docstrings import check_short_description_length
+from tools.check_docstrings import (
+    _config_keys_match,
+    check_short_description_length,
+)
+
+
+def test_config_keys_match() -> None:
+    """Test that DEFAULT_CONFIG and _CONFIG_KEYS stay in sync."""
+    assert _config_keys_match(), "DEFAULT_CONFIG and _CONFIG_KEYS must have the same keys"
+
+
+def test_mutually_exclusive_type_consistency_flags(tmp_path: Path) -> None:
+    """Test that --check-type-consistency and --no-check-type-consistency cannot be used together."""
+    test_file = tmp_path / "test.py"
+    test_file.write_text('"""Module."""\ndef foo(): pass\n')
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "tools.check_docstrings",
+            str(test_file),
+            "--check-type-consistency",
+            "--no-check-type-consistency",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+    assert "not allowed with" in result.stderr
 
 
 def test_valid_docstrings() -> None:
@@ -702,6 +731,65 @@ def method(self, x: int) -> None:
 ''',
             0,
             "",
+        ),
+        # pos-only param type mismatch
+        (
+            '''
+"""Test module with pos-only param mismatch."""
+
+def foo(x: int, /, y: str) -> None:
+    """Function with pos-only param.
+
+    Args:
+        x (str): Docstring says str, annotation says int
+        y (str): Correct
+
+    Returns:
+        None
+    """
+    pass
+''',
+            1,
+            "docstring says 'str' but annotation says 'int'",
+        ),
+        # kw-only param type mismatch
+        (
+            '''
+"""Test module with kw-only param mismatch."""
+
+def foo(x: int, *, y: str) -> None:
+    """Function with kw-only param.
+
+    Args:
+        x (int): Correct
+        y (int): Docstring says int, annotation says str
+
+    Returns:
+        None
+    """
+    pass
+''',
+            1,
+            "docstring says 'int' but annotation says 'str'",
+        ),
+        # *args type mismatch
+        (
+            '''
+"""Test module with *args type mismatch."""
+
+def foo(*args: int) -> None:
+    """Function with varargs.
+
+    Args:
+        args (str): Docstring says str, annotation says int
+
+    Returns:
+        None
+    """
+    pass
+''',
+            1,
+            "docstring says 'str' but annotation says 'int'",
         ),
     ],
 )

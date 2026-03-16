@@ -20,6 +20,9 @@ from google_docstring_parser.google_docstring_parser import (
     parse_google_docstring,
 )
 
+# Preview length for short description error messages
+SHORT_DESC_PREVIEW_LENGTH = 50
+
 # Default configuration
 DEFAULT_CONFIG = {
     "paths": [],  # Empty by default, so no directories are scanned unless explicitly specified
@@ -70,6 +73,11 @@ _CONFIG_KEYS: dict[str, tuple[str, type]] = {
     "exclude_files": ("exclude_files", list),
     "verbose": ("verbose", bool),
 }
+
+
+def _config_keys_match() -> bool:
+    """Return True if DEFAULT_CONFIG and _CONFIG_KEYS have the same keys."""
+    return set(DEFAULT_CONFIG.keys()) == set(_CONFIG_KEYS.keys())
 
 
 def _apply_tool_config(config: dict[str, Any], tool_config: dict[str, Any]) -> None:
@@ -192,6 +200,32 @@ def _annotation_to_str(annotation: ast.expr | None) -> str | None:
     return ast.unparse(annotation)
 
 
+def _get_ast_param_types(node: ast.FunctionDef | ast.AsyncFunctionDef) -> dict[str, str]:
+    """Extract parameter names and type strings from function AST.
+
+    Args:
+        node (ast.FunctionDef | ast.AsyncFunctionDef): Function AST node
+
+    Returns:
+        dict[str, str]: Map of param name to annotation string (skips self/cls)
+    """
+    ast_params: dict[str, str] = {}
+    all_args: list[ast.arg] = []
+    all_args.extend(node.args.posonlyargs)
+    all_args.extend(node.args.args)
+    all_args.extend(node.args.kwonlyargs)
+    if node.args.vararg is not None:
+        all_args.append(node.args.vararg)
+    if node.args.kwarg is not None:
+        all_args.append(node.args.kwarg)
+    for arg in all_args:
+        if arg.arg in ("self", "cls"):
+            continue
+        if ann_str := _annotation_to_str(arg.annotation):
+            ast_params[arg.arg] = ann_str
+    return ast_params
+
+
 def check_type_consistency(
     parsed: dict[str, Any],
     node: ast.FunctionDef | ast.AsyncFunctionDef,
@@ -206,14 +240,7 @@ def check_type_consistency(
         list[str]: List of error messages for type mismatches
     """
     errors = []
-
-    # Build param dict from AST (skip self/cls)
-    ast_params: dict[str, str] = {}
-    for arg in node.args.args:
-        if arg.arg in ("self", "cls"):
-            continue
-        if ann_str := _annotation_to_str(arg.annotation):
-            ast_params[arg.arg] = ann_str
+    ast_params = _get_ast_param_types(node)
 
     # Compare Args
     for arg in parsed.get("Args", []):
@@ -379,8 +406,11 @@ def check_short_description_length(parsed: dict[str, Any], min_length: int) -> l
         return []
 
     if len(short_desc) < min_length:
-        preview_len = 50
-        preview = short_desc[:preview_len] + "..." if len(short_desc) > preview_len else short_desc
+        preview = (
+            short_desc[:SHORT_DESC_PREVIEW_LENGTH] + "..."
+            if len(short_desc) > SHORT_DESC_PREVIEW_LENGTH
+            else short_desc
+        )
         return [
             f"Short description too short ({len(short_desc)} chars, min {min_length}): '{preview}'",
         ]
@@ -746,22 +776,24 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Require parameter types in docstrings",
     )
-    parser.add_argument(
+    ref_group = parser.add_mutually_exclusive_group()
+    ref_group.add_argument(
         "--check-references",
         action="store_true",
         help="Check references for errors",
     )
-    parser.add_argument(
+    ref_group.add_argument(
         "--no-check-references",
         action="store_true",
         help="Skip reference checking",
     )
-    parser.add_argument(
+    type_consistency_group = parser.add_mutually_exclusive_group()
+    type_consistency_group.add_argument(
         "--check-type-consistency",
         action="store_true",
         help="Compare docstring types with function annotations",
     )
-    parser.add_argument(
+    type_consistency_group.add_argument(
         "--no-check-type-consistency",
         action="store_true",
         help="Skip type consistency checking",
@@ -810,14 +842,14 @@ def _get_config_values(
     # Get verbose
     verbose = args.verbose or config["verbose"]
 
-    # Get check_references - handle both positive and negative flags
+    # Get check_references - handle both positive and negative flags (mutually exclusive)
     check_references = config["check_references"]
     if args.check_references:
         check_references = True
     if args.no_check_references:
         check_references = False
 
-    # Get check_type_consistency - handle both positive and negative flags
+    # Get check_type_consistency - handle both positive and negative flags (mutually exclusive)
     check_type_consistency = config.get("check_type_consistency", False)
     if args.check_type_consistency:
         check_type_consistency = True
