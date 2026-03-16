@@ -25,13 +25,14 @@ DEFAULT_CONFIG = {
     "paths": [],  # Empty by default, so no directories are scanned unless explicitly specified
     "require_param_types": False,
     "check_references": True,
+    "min_short_description_length": 50,
     "exclude_files": [],
     "verbose": False,
 }
 
 
 class DocstringContext(NamedTuple):
-    """Context for docstring processing.
+    """Context for docstring processing, validation, and error reporting.
 
     Args:
         file_path (Path): Path to the file
@@ -40,6 +41,7 @@ class DocstringContext(NamedTuple):
         verbose (bool): Whether to print verbose output
         require_param_types (bool): Whether parameter types are required
         check_references (bool): Whether to check references for errors
+        min_short_description_length (int): Minimum length for short description
 
     Returns:
         DocstringContext: A named tuple containing docstring processing context
@@ -51,6 +53,7 @@ class DocstringContext(NamedTuple):
     verbose: bool
     require_param_types: bool = False
     check_references: bool = True
+    min_short_description_length: int = 50
 
 
 def load_pyproject_config() -> dict[str, Any]:
@@ -82,6 +85,8 @@ def load_pyproject_config() -> dict[str, Any]:
             config["require_param_types"] = bool(tool_config["require_param_types"])
         if "check_references" in tool_config:
             config["check_references"] = bool(tool_config["check_references"])
+        if "min_short_description_length" in tool_config:
+            config["min_short_description_length"] = int(tool_config["min_short_description_length"])
         if "exclude_files" in tool_config:
             config["exclude_files"] = tool_config["exclude_files"]
         if "verbose" in tool_config:
@@ -94,7 +99,7 @@ def load_pyproject_config() -> dict[str, Any]:
 
 
 def get_docstrings(file_path: Path) -> list[tuple[str, int, str | None, ast.AST | None]]:
-    """Extract docstrings from a Python file.
+    """Extract docstrings from a Python file using AST parsing.
 
     Args:
         file_path (Path): Path to the Python file
@@ -128,7 +133,7 @@ def get_docstrings(file_path: Path) -> list[tuple[str, int, str | None, ast.AST 
 
 
 def check_param_types(docstring_dict: dict[str, Any], require_types: bool) -> list[str]:
-    """Check if all parameters have types if required.
+    """Check if all parameters have types when types are required.
 
     Args:
         docstring_dict (dict[str, Any]): Parsed docstring dictionary
@@ -177,7 +182,7 @@ def _check_reference_fields(reference: dict[str, Any], index: int) -> list[str]:
 
 
 def check_references(docstring_dict: dict[str, Any]) -> list[str]:
-    """Check references section for common errors.
+    """Check references section for common formatting errors.
 
     Args:
         docstring_dict (dict[str, Any]): Parsed docstring dictionary
@@ -216,7 +221,7 @@ def check_references(docstring_dict: dict[str, Any]) -> list[str]:
 
 
 def validate_docstring(docstring: str) -> list[str]:
-    """Perform additional validation on a docstring.
+    """Perform additional validation on docstring format and structure.
 
     Args:
         docstring (str): The docstring to validate
@@ -250,7 +255,7 @@ def validate_docstring(docstring: str) -> list[str]:
 
 
 def check_returns_section_name(docstring: str) -> list[str]:
-    """Check for incorrect Returns section names.
+    """Check for incorrect Returns section names (e.g. return vs Returns).
 
     Args:
         docstring (str): The docstring to check
@@ -267,8 +272,34 @@ def check_returns_section_name(docstring: str) -> list[str]:
     return errors
 
 
+def check_short_description_length(parsed: dict[str, Any], min_length: int) -> list[str]:
+    """Check that the short description meets the minimum length requirement.
+
+    Args:
+        parsed (dict[str, Any]): Parsed docstring dictionary
+        min_length (int): Minimum length for short description (0 to disable)
+
+    Returns:
+        list[str]: List of error messages for short descriptions that are too short
+    """
+    if min_length <= 0:
+        return []
+
+    short_desc = (parsed.get("Description") or "").split("\n")[0].strip()
+    if not short_desc:
+        return []
+
+    if len(short_desc) < min_length:
+        preview_len = 50
+        preview = short_desc[:preview_len] + "..." if len(short_desc) > preview_len else short_desc
+        return [
+            f"Short description too short ({len(short_desc)} chars, min {min_length}): '{preview}'",
+        ]
+    return []
+
+
 def check_returns_type(docstring_dict: dict[str, Any]) -> list[str]:
-    """Check Returns type in a docstring."""
+    """Check that the Returns section has proper type annotation."""
     errors = []
     if returns := docstring_dict.get("Returns"):
         # Special case: Returns section just contains "None"
@@ -286,7 +317,7 @@ def check_returns_type(docstring_dict: dict[str, Any]) -> list[str]:
 
 
 def _format_error(context: DocstringContext, error: str) -> str:
-    """Format an error message consistently.
+    """Format an error message consistently with file, line, and name.
 
     Args:
         context (DocstringContext): Docstring context
@@ -333,7 +364,7 @@ def safe_execute(
 
 
 def _check_returns_section(context: DocstringContext, docstring: str) -> list[str]:
-    """Check the Returns section name.
+    """Check the Returns section name for correct spelling.
 
     Args:
         context (DocstringContext): Docstring context
@@ -352,7 +383,7 @@ def _check_returns_section(context: DocstringContext, docstring: str) -> list[st
 
 
 def _validate_docstring_format(context: DocstringContext, docstring: str) -> list[str]:
-    """Validate docstring format.
+    """Validate docstring format for common structural issues.
 
     Args:
         context (DocstringContext): Docstring context
@@ -371,7 +402,7 @@ def _validate_docstring_format(context: DocstringContext, docstring: str) -> lis
 
 
 def _parse_and_check_returns(context: DocstringContext, docstring: str) -> tuple[list[str], dict[str, Any] | None]:
-    """Parse docstring and check returns type.
+    """Parse docstring and check that the Returns section has proper type.
 
     Args:
         context (DocstringContext): Docstring context
@@ -408,7 +439,7 @@ def _parse_and_check_returns(context: DocstringContext, docstring: str) -> tuple
 
 
 def _check_additional_validations(context: DocstringContext, parsed: dict[str, Any]) -> list[str]:
-    """Run additional validations on parsed docstring.
+    """Run additional validations on the parsed docstring dictionary.
 
     Args:
         context (DocstringContext): Docstring context
@@ -438,11 +469,21 @@ def _check_additional_validations(context: DocstringContext, parsed: dict[str, A
         )
         errors.extend(ref_errors)
 
+    if context.min_short_description_length > 0:
+        length_errors, _ = safe_execute(
+            context,
+            check_short_description_length,
+            parsed,
+            context.min_short_description_length,
+            error_prefix="Error checking short description length",
+        )
+        errors.extend(length_errors)
+
     return errors
 
 
 def _process_docstring(context: DocstringContext, docstring: str) -> list[str]:
-    """Process a single docstring.
+    """Process a single docstring and collect all validation errors.
 
     Args:
         context (DocstringContext): Docstring context
@@ -482,14 +523,16 @@ def check_file(
     require_param_types: bool = False,
     verbose: bool = False,
     check_references: bool = True,
+    min_short_description_length: int = 50,
 ) -> list[str]:
-    """Check docstrings in a file.
+    """Check docstrings in a Python file for parsing and validation errors.
 
     Args:
         file_path (Path): Path to the Python file
         require_param_types (bool): Whether parameter types are required
         verbose (bool): Whether to print verbose output
         check_references (bool): Whether to check references for errors
+        min_short_description_length (int): Minimum length for short description (0 to disable)
 
     Returns:
         list[str]: List of error messages
@@ -516,6 +559,7 @@ def check_file(
             verbose=verbose,
             require_param_types=require_param_types,
             check_references=check_references,
+            min_short_description_length=min_short_description_length,
         )
         errors.extend(_process_docstring(context, docstring))
 
@@ -528,6 +572,7 @@ def scan_directory(
     require_param_types: bool = False,
     verbose: bool = False,
     check_references: bool = True,
+    min_short_description_length: int = 50,
 ) -> list[str]:
     """Scan a directory for Python files and check their docstrings.
 
@@ -537,6 +582,7 @@ def scan_directory(
         require_param_types (bool): Whether parameter types are required
         verbose (bool): Whether to print verbose output
         check_references (bool): Whether to check references for errors
+        min_short_description_length (int): Minimum length for short description (0 to disable)
 
     Returns:
         list[str]: List of error messages
@@ -559,12 +605,20 @@ def scan_directory(
                 break
 
         if not should_exclude:
-            errors.extend(check_file(py_file, require_param_types, verbose, check_references))
+            errors.extend(
+                check_file(
+                    py_file,
+                    require_param_types,
+                    verbose,
+                    check_references,
+                    min_short_description_length,
+                ),
+            )
     return errors
 
 
 def _parse_args() -> argparse.Namespace:
-    """Parse command line arguments.
+    """Parse command line arguments for the docstring checker.
 
     Returns:
         argparse.Namespace: Parsed command line arguments
@@ -598,13 +652,19 @@ def _parse_args() -> argparse.Namespace:
         default="",
     )
     parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
+    parser.add_argument(
+        "--min-short-description-length",
+        type=int,
+        metavar="N",
+        help="Minimum length for short description (0 to disable)",
+    )
     return parser.parse_args()
 
 
 def _get_config_values(
     args: argparse.Namespace,
     config: dict[str, Any],
-) -> tuple[list[str], bool, bool, bool, list[str]]:
+) -> tuple[list[str], bool, bool, bool, int, list[str]]:
     """Get configuration values from command line arguments and config file.
 
     Args:
@@ -612,11 +672,12 @@ def _get_config_values(
         config (dict[str, Any]): Configuration dictionary
 
     Returns:
-        tuple[list[str], bool, bool, bool, list[str]]: Tuple containing:
+        tuple[list[str], bool, bool, bool, int, list[str]]: Tuple containing:
             - List of paths to check
             - Whether to require parameter types
             - Whether to check references
             - Whether to enable verbose output
+            - Minimum short description length
             - List of files to exclude
     """
     # Get paths
@@ -644,7 +705,12 @@ def _get_config_values(
     if not exclude_files:
         exclude_files = config["exclude_files"]
 
-    return paths, require_param_types, verbose, check_references, exclude_files
+    # Get min_short_description_length - CLI overrides config
+    min_short_description_length = config.get("min_short_description_length", 50)
+    if args.min_short_description_length is not None:
+        min_short_description_length = args.min_short_description_length
+
+    return paths, require_param_types, verbose, check_references, min_short_description_length, exclude_files
 
 
 def _process_paths(
@@ -653,8 +719,9 @@ def _process_paths(
     require_param_types: bool,
     verbose: bool,
     check_references: bool,
+    min_short_description_length: int,
 ) -> list[str]:
-    """Process paths and check docstrings.
+    """Process paths and check docstrings in each file or directory.
 
     Args:
         paths (list[str]): List of paths to check
@@ -662,6 +729,7 @@ def _process_paths(
         require_param_types (bool): Whether parameter types are required
         verbose (bool): Whether to print verbose output
         check_references (bool): Whether to check references for errors
+        min_short_description_length (int): Minimum length for short description (0 to disable)
 
     Returns:
         list[str]: List of error messages
@@ -670,10 +738,23 @@ def _process_paths(
     for path_str in paths:
         path = Path(path_str)
         if path.is_dir():
-            errors = scan_directory(path, exclude_files, require_param_types, verbose, check_references)
+            errors = scan_directory(
+                path,
+                exclude_files,
+                require_param_types,
+                verbose,
+                check_references,
+                min_short_description_length,
+            )
             all_errors.extend(errors)
         elif path.is_file() and path.suffix == ".py":
-            errors = check_file(path, require_param_types, verbose, check_references)
+            errors = check_file(
+                path,
+                require_param_types,
+                verbose,
+                check_references,
+                min_short_description_length,
+            )
             all_errors.extend(errors)
         else:
             print(f"Error: {path} is not a directory or Python file")
@@ -681,7 +762,7 @@ def _process_paths(
 
 
 def main() -> None:
-    """Run the docstring checker.
+    """Run the docstring checker and exit with appropriate status code.
 
     Returns:
         None
@@ -693,7 +774,12 @@ def main() -> None:
     args = _parse_args()
 
     # Get configuration values
-    paths, require_param_types, verbose, check_references, exclude_files = _get_config_values(args, config)
+    paths, require_param_types, verbose, check_references, min_short_description_length, exclude_files = (
+        _get_config_values(
+            args,
+            config,
+        )
+    )
 
     # Print configuration if verbose
     if verbose:
@@ -701,6 +787,7 @@ def main() -> None:
         print(f"  Paths: {paths}")
         print(f"  Require parameter types: {require_param_types}")
         print(f"  Check references: {check_references}")
+        print(f"  Min short description length: {min_short_description_length}")
         print(f"  Exclude files: {exclude_files}")
 
     # Check if paths is empty
@@ -717,6 +804,7 @@ def main() -> None:
         require_param_types,
         verbose,
         check_references,
+        min_short_description_length,
     ):
         for error in all_errors:
             print(error)

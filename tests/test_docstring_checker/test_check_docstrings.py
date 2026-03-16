@@ -4,8 +4,11 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
+
+from tools.check_docstrings import check_short_description_length
 
 
 def test_valid_docstrings() -> None:
@@ -21,7 +24,9 @@ def test_valid_docstrings() -> None:
             "tools.check_docstrings",
             str(valid_dir),
             "--exclude-files",
-            "test_malformed_docstrings.py,test_check_docstrings.py"
+            "test_malformed_docstrings.py,test_check_docstrings.py",
+            "--min-short-description-length",
+            "0",
         ],
         capture_output=True,
         text=True,
@@ -125,6 +130,9 @@ def test_config_from_pyproject_toml() -> None:
 
     # Check that it reads exclude_files from pyproject.toml
     assert "Exclude files: ['test_malformed_docstrings.py']" in result.stdout, "Should read exclude_files from pyproject.toml"
+
+    # Check that it reads min_short_description_length from pyproject.toml
+    assert "Min short description length: 50" in result.stdout, "Should read min_short_description_length from pyproject.toml"
 
 
 def test_missing_param_types_in_real_code() -> None:
@@ -249,6 +257,8 @@ def test_error_count_reporting(code: str, expected_count: int, expected_message:
             "tools.check_docstrings",
             str(temp_file),
             "--require-param-types",
+            "--min-short-description-length",
+            "0",
         ],
         capture_output=True,
         text=True,
@@ -347,6 +357,8 @@ def test_returns_validation(code: str, expected_returncode: int, expected_output
             "tools.check_docstrings",
             str(temp_file),
             "--verbose",
+            "--min-short-description-length",
+            "0",
         ],
         capture_output=True,
         text=True,
@@ -545,3 +557,49 @@ paths = []
 
     # Check that it shows the empty paths in the configuration output
     assert "Paths: []" in result.stdout, "Should show empty paths list in configuration"
+
+
+@pytest.mark.parametrize(
+    "parsed,min_length,expected_errors",
+    [
+        (
+            {"Description": "Short."},
+            50,
+            ["Short description too short (6 chars, min 50): 'Short.'"],
+        ),
+        (
+            {"Description": "A" * 49},
+            50,
+            ["Short description too short (49 chars, min 50): 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'"],
+        ),
+        ({"Description": "A" * 50}, 50, []),
+        ({"Description": "A" * 60}, 50, []),
+        ({"Description": ""}, 50, []),
+        ({}, 50, []),
+        ({"Description": "Short."}, 0, []),
+        ({"Description": "Short."}, 5, []),
+        ({"Description": "Short."}, 6, []),
+        (
+            {"Description": "Short."},
+            7,
+            ["Short description too short (6 chars, min 7): 'Short.'"],
+        ),
+        (
+            {"Description": "First line.\n\nSecond paragraph."},
+            50,
+            ["Short description too short (11 chars, min 50): 'First line.'"],
+        ),
+    ],
+)
+def test_check_short_description_length(
+    parsed: dict[str, Any], min_length: int, expected_errors: list[str]
+) -> None:
+    """Test that check_short_description_length validates correctly.
+
+    Args:
+        parsed (dict): Parsed docstring dict with Description key
+        min_length (int): Minimum length threshold
+        expected_errors (list[str]): Expected error messages
+    """
+    result = check_short_description_length(parsed, min_length)
+    assert result == expected_errors

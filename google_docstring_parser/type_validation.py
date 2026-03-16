@@ -89,7 +89,7 @@ NESTING_KEYWORD = "with"
 
 
 class InvalidTypeAnnotationError(ValueError):
-    """Error raised when a type annotation is invalid.
+    """Error raised when a type annotation is invalid or malformed.
 
     Args:
         message (str): The error message.
@@ -100,7 +100,7 @@ class InvalidTypeAnnotationError(ValueError):
     INVALID_NESTED_TYPE = "Invalid nested type: {}"
 
     def __init__(self, message: str) -> None:
-        """Initialize the error with a message.
+        """Initialize the error instance with a descriptive message.
 
         Args:
             message (str): The error message.
@@ -125,7 +125,7 @@ class BracketValidationError(ValueError):
     WRONG_BRACKET_TYPE = "Collection '{}' must use square brackets for type arguments, not '{}'"
 
     def __init__(self, error_type: str) -> None:
-        """Initialize with a specific error type.
+        """Initialize the error with a specific bracket validation type.
 
         Args:
             error_type (str): One of the predefined error types.
@@ -137,7 +137,7 @@ class BracketValidationError(ValueError):
 
 
 def is_collection_type(type_name: str) -> bool:
-    """Check if a type name is a known collection type.
+    """Check if a type name is a known collection type (list, dict, etc).
 
     Args:
         type_name (str): The type name to check.
@@ -261,7 +261,7 @@ def _is_within_string_literal(text: str, position: int) -> bool:
 
 
 def _looks_like_type_annotation(text: str) -> bool:
-    """Check if text looks like a type annotation.
+    """Check if text looks like a type annotation using heuristics.
 
     Args:
         text (str): The text to check
@@ -277,7 +277,7 @@ def _looks_like_type_annotation(text: str) -> bool:
 
 
 def _process_string_literals(text: str) -> tuple[str, list[str]]:
-    """Process string literals in text.
+    """Process string literals in text by replacing them with placeholders.
 
     Args:
         text (str): The text to process
@@ -386,7 +386,7 @@ def _check_for_opening_bracket(
     bracket_stack: list[str],
     collection_stack: list[tuple[str, str]],
 ) -> None:
-    """Check for opening bracket in type declaration.
+    """Check for opening bracket in type declaration and update stacks.
 
     Args:
         tokens (list[str]): List of tokens
@@ -409,7 +409,7 @@ def _check_for_opening_bracket(
 
 
 def _check_for_closing_bracket(token: str, bracket_stack: list[str], collection_stack: list[tuple[str, str]]) -> None:
-    """Check for closing bracket in type declaration.
+    """Check for closing bracket in type declaration and validate pairing.
 
     Args:
         token (str): Current token
@@ -440,7 +440,7 @@ def _check_for_closing_bracket(token: str, bracket_stack: list[str], collection_
 
 
 def _check_for_bare_collection(tokens: list[str], i: int, token: str) -> None:
-    """Check for bare collection type usage.
+    """Check for bare collection type usage without type arguments.
 
     Args:
         tokens (list[str]): List of tokens
@@ -487,7 +487,7 @@ def _is_bare_collection_in_nested_type(token: str, tokens: list[str], i: int, br
 
 
 def _check_tokens_for_collection_type_usage(tokens: list[str]) -> None:
-    """Check tokens for proper collection type usage.
+    """Check tokens for proper collection type usage and brackets.
 
     Args:
         tokens (list[str]): List of tokens to check
@@ -539,7 +539,7 @@ def _check_tokens_for_collection_type_usage(tokens: list[str]) -> None:
 
 
 def _validate_type_declaration(declaration: str) -> None:
-    """Validate a type declaration.
+    """Validate a type declaration for syntax and collection usage.
 
     Args:
         declaration (str): The type declaration to validate

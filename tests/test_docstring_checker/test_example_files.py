@@ -11,14 +11,24 @@ from tools.check_docstrings import check_file, scan_directory
 def test_valid_docstrings_file() -> None:
     """Test that the valid docstrings file passes the checker."""
     valid_file = Path(__file__).parent / "test_valid_docstrings.py"
-    errors = check_file(valid_file, require_param_types=False, verbose=True)
+    errors = check_file(
+        valid_file,
+        require_param_types=False,
+        verbose=True,
+        min_short_description_length=0,
+    )
     assert not errors, f"Found errors in valid docstrings file: {errors}"
 
 
 def test_malformed_docstrings_file() -> None:
     """Test that the malformed docstrings file fails the checker."""
     malformed_file = Path(__file__).parent / "test_malformed_docstrings.py"
-    errors = check_file(malformed_file, require_param_types=False, verbose=True)
+    errors = check_file(
+        malformed_file,
+        require_param_types=False,
+        verbose=True,
+        min_short_description_length=0,
+    )
 
     # Check that we found the expected errors
     assert errors, "No errors found in malformed docstrings file"
@@ -33,10 +43,20 @@ def test_require_param_types_on_malformed_file() -> None:
     malformed_file = Path(__file__).parent / "test_malformed_docstrings.py"
 
     # First check without requiring types
-    errors_without_types = check_file(malformed_file, require_param_types=False, verbose=True)
+    errors_without_types = check_file(
+        malformed_file,
+        require_param_types=False,
+        verbose=True,
+        min_short_description_length=0,
+    )
 
     # Then check with requiring types
-    errors_with_types = check_file(malformed_file, require_param_types=True, verbose=True)
+    errors_with_types = check_file(
+        malformed_file,
+        require_param_types=True,
+        verbose=True,
+        min_short_description_length=0,
+    )
 
     # Should find more errors when requiring types
     assert len(errors_with_types) > len(errors_without_types)
@@ -56,6 +76,7 @@ def test_scan_directory() -> None:
         exclude_files=["test_malformed_docstrings.py"],
         require_param_types=False,
         verbose=True,
+        min_short_description_length=0,
     )
 
     # Scan without excluding the malformed file
@@ -64,6 +85,7 @@ def test_scan_directory() -> None:
         exclude_files=[],
         require_param_types=False,
         verbose=True,
+        min_short_description_length=0,
     )
 
     # Should find more errors when including the malformed file
@@ -82,7 +104,12 @@ def test_scan_directory() -> None:
 def test_parametrized_file_checks(filename: str, require_types: bool, expected_error_count: int) -> None:
     """Test checking different files with different settings."""
     file_path = Path(__file__).parent / filename
-    errors = check_file(file_path, require_param_types=require_types, verbose=True)
+    errors = check_file(
+        file_path,
+        require_param_types=require_types,
+        verbose=True,
+        min_short_description_length=0,
+    )
 
     # Check that we found at least the expected number of errors
     assert len(errors) >= expected_error_count, (
