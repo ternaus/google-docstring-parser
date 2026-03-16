@@ -4,8 +4,40 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
+
+from tools.check_docstrings import (
+    _config_keys_match,
+    check_short_description_length,
+)
+
+
+def test_config_keys_match() -> None:
+    """Test that DEFAULT_CONFIG and _CONFIG_KEYS stay in sync."""
+    assert _config_keys_match(), "DEFAULT_CONFIG and _CONFIG_KEYS must have the same keys"
+
+
+def test_mutually_exclusive_type_consistency_flags(tmp_path: Path) -> None:
+    """Test that --check-type-consistency and --no-check-type-consistency cannot be used together."""
+    test_file = tmp_path / "test.py"
+    test_file.write_text('"""Module."""\ndef foo(): pass\n')
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "tools.check_docstrings",
+            str(test_file),
+            "--check-type-consistency",
+            "--no-check-type-consistency",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+    assert "not allowed with" in result.stderr
 
 
 def test_valid_docstrings() -> None:
@@ -21,7 +53,9 @@ def test_valid_docstrings() -> None:
             "tools.check_docstrings",
             str(valid_dir),
             "--exclude-files",
-            "test_malformed_docstrings.py,test_check_docstrings.py"
+            "test_malformed_docstrings.py,test_check_docstrings.py",
+            "--min-short-description-length",
+            "0",
         ],
         capture_output=True,
         text=True,
@@ -125,6 +159,9 @@ def test_config_from_pyproject_toml() -> None:
 
     # Check that it reads exclude_files from pyproject.toml
     assert "Exclude files: ['test_malformed_docstrings.py']" in result.stdout, "Should read exclude_files from pyproject.toml"
+
+    # Check that it reads min_short_description_length from pyproject.toml
+    assert "Min short description length: 50" in result.stdout, "Should read min_short_description_length from pyproject.toml"
 
 
 def test_missing_param_types_in_real_code() -> None:
@@ -249,6 +286,8 @@ def test_error_count_reporting(code: str, expected_count: int, expected_message:
             "tools.check_docstrings",
             str(temp_file),
             "--require-param-types",
+            "--min-short-description-length",
+            "0",
         ],
         capture_output=True,
         text=True,
@@ -347,6 +386,8 @@ def test_returns_validation(code: str, expected_returncode: int, expected_output
             "tools.check_docstrings",
             str(temp_file),
             "--verbose",
+            "--min-short-description-length",
+            "0",
         ],
         capture_output=True,
         text=True,
@@ -545,3 +586,276 @@ paths = []
 
     # Check that it shows the empty paths in the configuration output
     assert "Paths: []" in result.stdout, "Should show empty paths list in configuration"
+
+
+@pytest.mark.parametrize(
+    "parsed,min_length,expected_errors",
+    [
+        (
+            {"Description": "Short."},
+            50,
+            ["Short description too short (6 chars, min 50): 'Short.'"],
+        ),
+        (
+            {"Description": "A" * 49},
+            50,
+            ["Short description too short (49 chars, min 50): 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'"],
+        ),
+        ({"Description": "A" * 50}, 50, []),
+        ({"Description": "A" * 60}, 50, []),
+        ({"Description": ""}, 50, []),
+        ({}, 50, []),
+        ({"Description": "Short."}, 0, []),
+        ({"Description": "Short."}, 5, []),
+        ({"Description": "Short."}, 6, []),
+        (
+            {"Description": "Short."},
+            7,
+            ["Short description too short (6 chars, min 7): 'Short.'"],
+        ),
+        (
+            {"Description": "First line.\n\nSecond paragraph."},
+            50,
+            ["Short description too short (11 chars, min 50): 'First line.'"],
+        ),
+    ],
+)
+def test_check_short_description_length(
+    parsed: dict[str, Any], min_length: int, expected_errors: list[str]
+) -> None:
+    """Test that check_short_description_length validates correctly.
+
+    Args:
+        parsed (dict): Parsed docstring dict with Description key
+        min_length (int): Minimum length threshold
+        expected_errors (list[str]): Expected error messages
+    """
+    result = check_short_description_length(parsed, min_length)
+    assert result == expected_errors
+
+
+@pytest.mark.parametrize(
+    "code,expected_returncode,expected_in_output",
+    [
+        # Param type match - no error
+        (
+            '''
+"""Test module with matching types."""
+
+def foo(x: int) -> str:
+    """Function with matching docstring types.
+
+    Args:
+        x (int): Param x
+
+    Returns:
+        str: Result
+    """
+    return str(x)
+''',
+            0,
+            "",
+        ),
+        # Param type mismatch - error
+        (
+            '''
+"""Test module with param type mismatch."""
+
+def foo(x: int) -> str:
+    """Function with wrong docstring type.
+
+    Args:
+        x (str): Docstring says str, annotation says int
+
+    Returns:
+        str: Result
+    """
+    return str(x)
+''',
+            1,
+            "docstring says 'str' but annotation says 'int'",
+        ),
+        # Return type mismatch - error
+        (
+            '''
+"""Test module with return type mismatch."""
+
+def foo(x: int) -> str:
+    """Function with wrong return type in docstring.
+
+    Args:
+        x (int): Param x
+
+    Returns:
+        int: Docstring says int, annotation says str
+    """
+    return str(x)
+''',
+            1,
+            "Returns: docstring says 'int' but annotation says 'str'",
+        ),
+        # Missing annotation in source - skip (no error)
+        (
+            '''
+"""Test module with no annotations."""
+
+def foo(x):
+    """Function with no type annotations in source.
+
+    Args:
+        x (int): Param x
+
+    Returns:
+        str: Result
+    """
+    return str(x)
+''',
+            0,
+            "",
+        ),
+        # self skipped - method with self, only x is compared
+        (
+            '''
+"""Test module with self param."""
+
+def method(self, x: int) -> None:
+    """Method with self.
+
+    Args:
+        x (int): Param x
+
+    Returns:
+        None
+    """
+    pass
+''',
+            0,
+            "",
+        ),
+        # pos-only param type mismatch
+        (
+            '''
+"""Test module with pos-only param mismatch."""
+
+def foo(x: int, /, y: str) -> None:
+    """Function with pos-only param.
+
+    Args:
+        x (str): Docstring says str, annotation says int
+        y (str): Correct
+
+    Returns:
+        None
+    """
+    pass
+''',
+            1,
+            "docstring says 'str' but annotation says 'int'",
+        ),
+        # kw-only param type mismatch
+        (
+            '''
+"""Test module with kw-only param mismatch."""
+
+def foo(x: int, *, y: str) -> None:
+    """Function with kw-only param.
+
+    Args:
+        x (int): Correct
+        y (int): Docstring says int, annotation says str
+
+    Returns:
+        None
+    """
+    pass
+''',
+            1,
+            "docstring says 'int' but annotation says 'str'",
+        ),
+        # *args type mismatch
+        (
+            '''
+"""Test module with *args type mismatch."""
+
+def foo(*args: int) -> None:
+    """Function with varargs.
+
+    Args:
+        args (str): Docstring says str, annotation says int
+
+    Returns:
+        None
+    """
+    pass
+''',
+            1,
+            "docstring says 'str' but annotation says 'int'",
+        ),
+        # Returns string "None" vs annotation str - mismatch detected
+        (
+            '''
+"""Test module with Returns as string None."""
+
+def foo() -> str:
+    """Function returning str but docstring says None.
+
+    Returns:
+        None
+    """
+    return "x"
+''',
+            1,
+            "Returns: docstring says 'None' but annotation says 'str'",
+        ),
+        # Whitespace normalization: tuple[int, str] vs tuple[int,str] - no error
+        (
+            '''
+"""Test module with whitespace in type."""
+
+def foo(x: tuple[int, str]) -> int | None:
+    """Function with types that may have different whitespace.
+
+    Args:
+        x (tuple[int, str]): Param with spaces in docstring
+
+    Returns:
+        int | None: Union with spaces
+    """
+    return None
+''',
+            0,
+            "",
+        ),
+    ],
+)
+def test_check_type_consistency(
+    code: str, expected_returncode: int, expected_in_output: str, tmp_path: Path
+) -> None:
+    """Test that check_type_consistency compares docstring types with annotations.
+
+    Args:
+        code (str): Python code to test
+        expected_returncode (int): Expected return code
+        expected_in_output (str): Expected substring in output (empty for success)
+        tmp_path (Path): Temporary directory fixture
+    """
+    temp_file = tmp_path / "test_file.py"
+    temp_file.write_text(code)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "tools.check_docstrings",
+            str(temp_file),
+            "--check-type-consistency",
+            "--min-short-description-length",
+            "0",
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == expected_returncode
+    if expected_in_output:
+        assert expected_in_output in result.stdout

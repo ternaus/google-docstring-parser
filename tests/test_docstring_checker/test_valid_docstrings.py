@@ -2,7 +2,7 @@
 
 This file contains properly formatted docstrings to test the docstring checker.
 """
-from typing import Dict, List, Any, Union
+from typing import Any
 
 
 def simple_function() -> bool:
@@ -23,14 +23,14 @@ def function_with_args(param1: int, param2: str) -> bool:
     return True
 
 
-def function_with_sections(param: Dict[str, Any]) -> List[Any]:
+def function_with_sections(param: dict[str, Any]) -> list[Any]:
     """Function with multiple sections.
 
     Args:
         param (dict[str, Any]): A dictionary parameter
 
     Returns:
-        list[str]: A list of items
+        list[Any]: A list of items
 
     Raises:
         ValueError: If param is empty

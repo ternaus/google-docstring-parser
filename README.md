@@ -146,6 +146,8 @@ Add a `[tool.docstring_checker]` section to your pyproject.toml:
 paths = ["src", "tests"]                     # Directories or files to scan
 require_param_types = true                   # Require parameter types in docstrings
 check_references = true                      # Check references for proper format
+check_type_consistency = true                # Compare docstring types with annotations
 exclude_files = ["conftest.py", "__init__.py"] # Files to exclude from checks
+min_short_description_length = 10            # Minimum summary length; set to 0 to disable
 verbose = false                              # Enable verbose output
 ```

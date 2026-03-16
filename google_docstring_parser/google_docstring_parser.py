@@ -40,7 +40,7 @@ __all__ = [
 
 
 class ReferenceFormatError(ValueError):
-    """Error raised when a reference format is invalid.
+    """Error raised when a reference format is invalid or malformed.
 
     Args:
         code (str): Error code identifying the specific format issue
@@ -88,7 +88,7 @@ class EmptyDescriptionError(ReferenceFormatError):
 
 
 def _extract_sections(docstring: str) -> dict[str, str]:
-    """Extract sections from a docstring.
+    """Extract named sections from a Google-style docstring.
 
     Args:
         docstring (str): The docstring to extract sections from
@@ -170,7 +170,7 @@ def _find_separator_colon(content: str) -> int:
 
 
 def _parse_reference_line(line: str, *, is_single: bool = False) -> dict[str, str]:
-    """Parse a single reference line.
+    """Parse a single reference line into description and source.
 
     Args:
         line (str): The line to parse
@@ -252,7 +252,7 @@ def _identify_main_reference_lines(lines: list[str]) -> list[str]:
 
 
 def _process_single_reference(main_line: str, all_lines: list[str]) -> dict[str, str]:
-    """Process a single reference entry.
+    """Process a single reference entry from the References section.
 
     Args:
         main_line (str): The main reference line
@@ -285,7 +285,7 @@ def _process_single_reference(main_line: str, all_lines: list[str]) -> dict[str,
 
 
 def _process_multiple_references(lines: list[str]) -> list[dict[str, str]]:
-    """Process multiple reference entries.
+    """Process multiple reference entries from the References section.
 
     Args:
         lines (list[str]): Lines containing multiple references
@@ -338,7 +338,7 @@ def _process_multiple_references(lines: list[str]) -> list[dict[str, str]]:
 
 
 def _parse_references(reference_content: str) -> list[dict[str, str]]:
-    """Parse references section content.
+    """Parse references section content into structured reference entries.
 
     Args:
         reference_content (str): Content of the references section
@@ -373,7 +373,7 @@ def _parse_references(reference_content: str) -> list[dict[str, str]]:
 
 
 def _validate_type_with_error_handling(type_str: str, result: dict[str, Any], collect_errors: bool) -> None:
-    """Validate a type annotation and handle any errors.
+    """Validate a type annotation and handle any validation errors.
 
     This function validates type annotations and handles errors differently based on the collect_errors flag:
     - When collect_errors is True: Errors are added to result["errors"] list instead of being raised
@@ -408,7 +408,7 @@ def _process_args_with_validation(
     validate_types: bool,
     collect_errors: bool,
 ) -> None:
-    """Process the Args section with type validation.
+    """Process the Args section with type validation and error collection.
 
     Args:
         sections (dict[str, str]): The sections dictionary
@@ -439,7 +439,7 @@ def _process_args_with_validation(
 
 
 def _parse_returns_section(sections: dict[str, str], *, validate_types: bool) -> dict[str, str] | str:
-    """Process the Returns section of a docstring.
+    """Process the Returns section of a docstring into type and description.
 
     Args:
         sections (dict[str, str]): The sections dictionary
@@ -482,7 +482,7 @@ def _process_returns_with_validation(
     validate_types: bool,
     collect_errors: bool,
 ) -> None:
-    """Process the Returns section with type validation.
+    """Process the Returns section with type validation and error handling.
 
     Args:
         sections (dict[str, str]): The sections dictionary
@@ -506,7 +506,7 @@ def _process_returns_with_validation(
 
 
 def _process_references_section(sections: dict[str, str], result: dict[str, Any]) -> None:
-    """Process the References section.
+    """Process the References section into structured reference entries.
 
     Args:
         sections (dict[str, str]): The sections dictionary
@@ -527,7 +527,7 @@ def parse_google_docstring(
     validate_types: bool = True,
     collect_errors: bool = True,
 ) -> dict[str, Any]:
-    """Parse a Google-style docstring.
+    """Parse a Google-style docstring into a structured dictionary.
 
     Args:
         docstring (str): The docstring to parse

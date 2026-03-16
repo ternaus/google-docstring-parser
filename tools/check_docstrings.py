@@ -20,18 +20,23 @@ from google_docstring_parser.google_docstring_parser import (
     parse_google_docstring,
 )
 
+# Preview length for short description error messages
+SHORT_DESC_PREVIEW_LENGTH = 50
+
 # Default configuration
 DEFAULT_CONFIG = {
     "paths": [],  # Empty by default, so no directories are scanned unless explicitly specified
     "require_param_types": False,
     "check_references": True,
+    "check_type_consistency": False,
+    "min_short_description_length": 0,
     "exclude_files": [],
     "verbose": False,
 }
 
 
 class DocstringContext(NamedTuple):
-    """Context for docstring processing.
+    """Context for docstring processing, validation, and error reporting.
 
     Args:
         file_path (Path): Path to the file
@@ -40,6 +45,9 @@ class DocstringContext(NamedTuple):
         verbose (bool): Whether to print verbose output
         require_param_types (bool): Whether parameter types are required
         check_references (bool): Whether to check references for errors
+        check_type_consistency (bool): Whether to compare docstring types with annotations
+        min_short_description_length (int): Minimum length for short description
+        node (ast.AST | None): AST node for the function or class
 
     Returns:
         DocstringContext: A named tuple containing docstring processing context
@@ -51,6 +59,33 @@ class DocstringContext(NamedTuple):
     verbose: bool
     require_param_types: bool = False
     check_references: bool = True
+    check_type_consistency: bool = False
+    min_short_description_length: int = 0
+    node: ast.AST | None = None
+
+
+_CONFIG_KEYS: dict[str, tuple[str, type]] = {
+    "paths": ("paths", list),
+    "require_param_types": ("require_param_types", bool),
+    "check_references": ("check_references", bool),
+    "check_type_consistency": ("check_type_consistency", bool),
+    "min_short_description_length": ("min_short_description_length", int),
+    "exclude_files": ("exclude_files", list),
+    "verbose": ("verbose", bool),
+}
+
+
+def _config_keys_match() -> bool:
+    """Return True if DEFAULT_CONFIG and _CONFIG_KEYS have the same keys."""
+    return set(DEFAULT_CONFIG.keys()) == set(_CONFIG_KEYS.keys())
+
+
+def _apply_tool_config(config: dict[str, Any], tool_config: dict[str, Any]) -> None:
+    """Apply tool_config values to config. Modifies config in place."""
+    for key, (config_key, converter) in _CONFIG_KEYS.items():
+        if key in tool_config:
+            raw = tool_config[key]
+            config[config_key] = raw if converter is list else converter(raw)
 
 
 def load_pyproject_config() -> dict[str, Any]:
@@ -60,8 +95,6 @@ def load_pyproject_config() -> dict[str, Any]:
         dict[str, Any]: Dictionary with configuration values
     """
     config = DEFAULT_CONFIG.copy()
-
-    # Look for pyproject.toml in the current directory
     pyproject_path = Path("pyproject.toml")
     if not pyproject_path.is_file():
         return config
@@ -69,24 +102,10 @@ def load_pyproject_config() -> dict[str, Any]:
     try:
         with pyproject_path.open("rb") as f:
             pyproject_data = tomli.load(f)
-
-        # Check if our tool is configured
         tool_config = pyproject_data.get("tool", {}).get("docstring_checker", {})
         if not tool_config:
             return config
-
-        # Update config with values from pyproject.toml
-        if "paths" in tool_config:
-            config["paths"] = tool_config["paths"]
-        if "require_param_types" in tool_config:
-            config["require_param_types"] = bool(tool_config["require_param_types"])
-        if "check_references" in tool_config:
-            config["check_references"] = bool(tool_config["check_references"])
-        if "exclude_files" in tool_config:
-            config["exclude_files"] = tool_config["exclude_files"]
-        if "verbose" in tool_config:
-            config["verbose"] = bool(tool_config["verbose"])
-
+        _apply_tool_config(config, tool_config)
     except Exception as e:
         print(f"Warning: Failed to load configuration from pyproject.toml: {e}")
 
@@ -94,7 +113,7 @@ def load_pyproject_config() -> dict[str, Any]:
 
 
 def get_docstrings(file_path: Path) -> list[tuple[str, int, str | None, ast.AST | None]]:
-    """Extract docstrings from a Python file.
+    """Extract docstrings from a Python file using AST parsing.
 
     Args:
         file_path (Path): Path to the Python file
@@ -128,7 +147,7 @@ def get_docstrings(file_path: Path) -> list[tuple[str, int, str | None, ast.AST 
 
 
 def check_param_types(docstring_dict: dict[str, Any], require_types: bool) -> list[str]:
-    """Check if all parameters have types if required.
+    """Check if all parameters have types when types are required.
 
     Args:
         docstring_dict (dict[str, Any]): Parsed docstring dictionary
@@ -146,6 +165,111 @@ def check_param_types(docstring_dict: dict[str, Any], require_types: bool) -> li
             errors.append(f"Parameter '{arg['name']}' is missing a type in docstring")
         elif "invalid type" in arg["type"].lower():
             errors.append(f"Parameter '{arg['name']}' has an invalid type in docstring: '{arg['type']}'")
+
+    return errors
+
+
+def _normalize_type(type_str: str) -> str:
+    """Normalize type string for comparison (quotes and whitespace only).
+
+    Python 3.10+ typing uses list, dict, tuple, X|Y - no List, Dict, Tuple, Union.
+    We do not normalize those; mismatches will be reported.
+    Internal whitespace differences (e.g., around commas, |, or brackets) are ignored.
+
+    Args:
+        type_str (str): Type string to normalize
+
+    Returns:
+        str: Normalized type string
+    """
+    normalized = type_str.strip().strip("'\"")
+    return re.sub(r"\s+", "", normalized)
+
+
+def _annotation_to_str(annotation: ast.expr | None) -> str | None:
+    """Extract the type string from an AST annotation node.
+
+    Args:
+        annotation (ast.expr | None): AST annotation node
+
+    Returns:
+        str | None: Type string or None if no annotation
+    """
+    if annotation is None:
+        return None
+    if isinstance(annotation, ast.Constant) and isinstance(annotation.value, str):
+        return annotation.value
+    return ast.unparse(annotation)
+
+
+def _get_ast_param_types(node: ast.FunctionDef | ast.AsyncFunctionDef) -> dict[str, str]:
+    """Extract parameter names and type strings from function AST.
+
+    Args:
+        node (ast.FunctionDef | ast.AsyncFunctionDef): Function AST node
+
+    Returns:
+        dict[str, str]: Map of param name to annotation string (skips self/cls)
+    """
+    ast_params: dict[str, str] = {}
+    all_args: list[ast.arg] = []
+    all_args.extend(node.args.posonlyargs)
+    all_args.extend(node.args.args)
+    all_args.extend(node.args.kwonlyargs)
+    if node.args.vararg is not None:
+        all_args.append(node.args.vararg)
+    if node.args.kwarg is not None:
+        all_args.append(node.args.kwarg)
+    for arg in all_args:
+        if arg.arg in ("self", "cls"):
+            continue
+        if ann_str := _annotation_to_str(arg.annotation):
+            ast_params[arg.arg] = ann_str
+    return ast_params
+
+
+def check_type_consistency(
+    parsed: dict[str, Any],
+    node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> list[str]:
+    """Compare docstring types with function annotations.
+
+    Args:
+        parsed (dict[str, Any]): Parsed docstring dictionary
+        node (ast.FunctionDef | ast.AsyncFunctionDef): Function AST node
+
+    Returns:
+        list[str]: List of error messages for type mismatches
+    """
+    errors = []
+    ast_params = _get_ast_param_types(node)
+
+    # Compare Args
+    for arg in parsed.get("Args", []):
+        doc_type = arg.get("type")
+        if not doc_type:
+            continue
+        param_name = arg.get("name")
+        if not param_name or param_name not in ast_params:
+            continue
+        ast_type = ast_params[param_name]
+        if _normalize_type(doc_type) != _normalize_type(ast_type):
+            errors.append(
+                f"Parameter '{param_name}': docstring says '{doc_type}' but annotation says '{ast_type}'",
+            )
+
+    # Compare Returns (handle both dict and string "None" from parse_google_docstring)
+    returns = parsed.get("Returns")
+    doc_ret: str | None = None
+    if isinstance(returns, dict):
+        doc_ret = returns.get("type")
+    elif isinstance(returns, str):
+        doc_ret = returns
+    ast_ret = _annotation_to_str(node.returns)
+    if doc_ret and ast_ret and _normalize_type(doc_ret) != _normalize_type(ast_ret):
+        errors.append(
+            f"Returns: docstring says '{doc_ret}' but annotation says '{ast_ret}'",
+        )
 
     return errors
 
@@ -177,7 +301,7 @@ def _check_reference_fields(reference: dict[str, Any], index: int) -> list[str]:
 
 
 def check_references(docstring_dict: dict[str, Any]) -> list[str]:
-    """Check references section for common errors.
+    """Check references section for common formatting errors.
 
     Args:
         docstring_dict (dict[str, Any]): Parsed docstring dictionary
@@ -216,7 +340,7 @@ def check_references(docstring_dict: dict[str, Any]) -> list[str]:
 
 
 def validate_docstring(docstring: str) -> list[str]:
-    """Perform additional validation on a docstring.
+    """Perform additional validation on docstring format and structure.
 
     Args:
         docstring (str): The docstring to validate
@@ -250,7 +374,7 @@ def validate_docstring(docstring: str) -> list[str]:
 
 
 def check_returns_section_name(docstring: str) -> list[str]:
-    """Check for incorrect Returns section names.
+    """Check for incorrect Returns section names (e.g. return vs Returns).
 
     Args:
         docstring (str): The docstring to check
@@ -267,8 +391,37 @@ def check_returns_section_name(docstring: str) -> list[str]:
     return errors
 
 
+def check_short_description_length(parsed: dict[str, Any], min_length: int) -> list[str]:
+    """Check that the short description meets the minimum length requirement.
+
+    Args:
+        parsed (dict[str, Any]): Parsed docstring dictionary
+        min_length (int): Minimum length for short description (0 to disable)
+
+    Returns:
+        list[str]: List of error messages for short descriptions that are too short
+    """
+    if min_length <= 0:
+        return []
+
+    short_desc = (parsed.get("Description") or "").split("\n")[0].strip()
+    if not short_desc:
+        return []
+
+    if len(short_desc) < min_length:
+        preview = (
+            short_desc[:SHORT_DESC_PREVIEW_LENGTH] + "..."
+            if len(short_desc) > SHORT_DESC_PREVIEW_LENGTH
+            else short_desc
+        )
+        return [
+            f"Short description too short ({len(short_desc)} chars, min {min_length}): '{preview}'",
+        ]
+    return []
+
+
 def check_returns_type(docstring_dict: dict[str, Any]) -> list[str]:
-    """Check Returns type in a docstring."""
+    """Check that the Returns section has proper type annotation."""
     errors = []
     if returns := docstring_dict.get("Returns"):
         # Special case: Returns section just contains "None"
@@ -286,7 +439,7 @@ def check_returns_type(docstring_dict: dict[str, Any]) -> list[str]:
 
 
 def _format_error(context: DocstringContext, error: str) -> str:
-    """Format an error message consistently.
+    """Format an error message consistently with file, line, and name.
 
     Args:
         context (DocstringContext): Docstring context
@@ -333,7 +486,7 @@ def safe_execute(
 
 
 def _check_returns_section(context: DocstringContext, docstring: str) -> list[str]:
-    """Check the Returns section name.
+    """Check the Returns section name for correct spelling.
 
     Args:
         context (DocstringContext): Docstring context
@@ -352,7 +505,7 @@ def _check_returns_section(context: DocstringContext, docstring: str) -> list[st
 
 
 def _validate_docstring_format(context: DocstringContext, docstring: str) -> list[str]:
-    """Validate docstring format.
+    """Validate docstring format for common structural issues.
 
     Args:
         context (DocstringContext): Docstring context
@@ -371,7 +524,7 @@ def _validate_docstring_format(context: DocstringContext, docstring: str) -> lis
 
 
 def _parse_and_check_returns(context: DocstringContext, docstring: str) -> tuple[list[str], dict[str, Any] | None]:
-    """Parse docstring and check returns type.
+    """Parse docstring and check that the Returns section has proper type.
 
     Args:
         context (DocstringContext): Docstring context
@@ -408,7 +561,7 @@ def _parse_and_check_returns(context: DocstringContext, docstring: str) -> tuple
 
 
 def _check_additional_validations(context: DocstringContext, parsed: dict[str, Any]) -> list[str]:
-    """Run additional validations on parsed docstring.
+    """Run additional validations on the parsed docstring dictionary.
 
     Args:
         context (DocstringContext): Docstring context
@@ -438,11 +591,35 @@ def _check_additional_validations(context: DocstringContext, parsed: dict[str, A
         )
         errors.extend(ref_errors)
 
+    if context.min_short_description_length > 0:
+        length_errors, _ = safe_execute(
+            context,
+            check_short_description_length,
+            parsed,
+            context.min_short_description_length,
+            error_prefix="Error checking short description length",
+        )
+        errors.extend(length_errors)
+
+    if (
+        context.check_type_consistency
+        and context.node is not None
+        and isinstance(context.node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    ):
+        consistency_errors, _ = safe_execute(
+            context,
+            check_type_consistency,
+            parsed,
+            context.node,
+            error_prefix="Error checking type consistency",
+        )
+        errors.extend(consistency_errors)
+
     return errors
 
 
 def _process_docstring(context: DocstringContext, docstring: str) -> list[str]:
-    """Process a single docstring.
+    """Process a single docstring and collect all validation errors.
 
     Args:
         context (DocstringContext): Docstring context
@@ -482,14 +659,18 @@ def check_file(
     require_param_types: bool = False,
     verbose: bool = False,
     check_references: bool = True,
+    check_type_consistency: bool = False,
+    min_short_description_length: int = 0,
 ) -> list[str]:
-    """Check docstrings in a file.
+    """Check docstrings in a Python file for parsing and validation errors.
 
     Args:
         file_path (Path): Path to the Python file
         require_param_types (bool): Whether parameter types are required
         verbose (bool): Whether to print verbose output
         check_references (bool): Whether to check references for errors
+        check_type_consistency (bool): Whether to compare docstring types with annotations
+        min_short_description_length (int): Minimum length for short description (0 to disable)
 
     Returns:
         list[str]: List of error messages
@@ -508,7 +689,7 @@ def check_file(
             print(error_msg)
         return errors
 
-    for name, line_no, docstring, _ in docstrings:
+    for name, line_no, docstring, node in docstrings:
         context = DocstringContext(
             file_path=file_path,
             line_no=line_no,
@@ -516,6 +697,9 @@ def check_file(
             verbose=verbose,
             require_param_types=require_param_types,
             check_references=check_references,
+            check_type_consistency=check_type_consistency,
+            min_short_description_length=min_short_description_length,
+            node=node,
         )
         errors.extend(_process_docstring(context, docstring))
 
@@ -528,6 +712,8 @@ def scan_directory(
     require_param_types: bool = False,
     verbose: bool = False,
     check_references: bool = True,
+    check_type_consistency: bool = False,
+    min_short_description_length: int = 0,
 ) -> list[str]:
     """Scan a directory for Python files and check their docstrings.
 
@@ -537,6 +723,8 @@ def scan_directory(
         require_param_types (bool): Whether parameter types are required
         verbose (bool): Whether to print verbose output
         check_references (bool): Whether to check references for errors
+        check_type_consistency (bool): Whether to compare docstring types with annotations
+        min_short_description_length (int): Minimum length for short description (0 to disable)
 
     Returns:
         list[str]: List of error messages
@@ -559,12 +747,21 @@ def scan_directory(
                 break
 
         if not should_exclude:
-            errors.extend(check_file(py_file, require_param_types, verbose, check_references))
+            errors.extend(
+                check_file(
+                    py_file,
+                    require_param_types,
+                    verbose,
+                    check_references,
+                    check_type_consistency,
+                    min_short_description_length,
+                ),
+            )
     return errors
 
 
 def _parse_args() -> argparse.Namespace:
-    """Parse command line arguments.
+    """Parse command line arguments for the docstring checker.
 
     Returns:
         argparse.Namespace: Parsed command line arguments
@@ -582,15 +779,27 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Require parameter types in docstrings",
     )
-    parser.add_argument(
+    ref_group = parser.add_mutually_exclusive_group()
+    ref_group.add_argument(
         "--check-references",
         action="store_true",
         help="Check references for errors",
     )
-    parser.add_argument(
+    ref_group.add_argument(
         "--no-check-references",
         action="store_true",
         help="Skip reference checking",
+    )
+    type_consistency_group = parser.add_mutually_exclusive_group()
+    type_consistency_group.add_argument(
+        "--check-type-consistency",
+        action="store_true",
+        help="Compare docstring types with function annotations",
+    )
+    type_consistency_group.add_argument(
+        "--no-check-type-consistency",
+        action="store_true",
+        help="Skip type consistency checking",
     )
     parser.add_argument(
         "--exclude-files",
@@ -598,13 +807,19 @@ def _parse_args() -> argparse.Namespace:
         default="",
     )
     parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
+    parser.add_argument(
+        "--min-short-description-length",
+        type=int,
+        metavar="N",
+        help="Minimum length for short description (0 to disable)",
+    )
     return parser.parse_args()
 
 
 def _get_config_values(
     args: argparse.Namespace,
     config: dict[str, Any],
-) -> tuple[list[str], bool, bool, bool, list[str]]:
+) -> tuple[list[str], bool, bool, bool, bool, int, list[str]]:
     """Get configuration values from command line arguments and config file.
 
     Args:
@@ -612,11 +827,13 @@ def _get_config_values(
         config (dict[str, Any]): Configuration dictionary
 
     Returns:
-        tuple[list[str], bool, bool, bool, list[str]]: Tuple containing:
+        tuple[list[str], bool, bool, bool, bool, int, list[str]]: Tuple containing:
             - List of paths to check
             - Whether to require parameter types
-            - Whether to check references
             - Whether to enable verbose output
+            - Whether to check references
+            - Whether to check type consistency
+            - Minimum short description length
             - List of files to exclude
     """
     # Get paths
@@ -628,12 +845,19 @@ def _get_config_values(
     # Get verbose
     verbose = args.verbose or config["verbose"]
 
-    # Get check_references - handle both positive and negative flags
+    # Get check_references - handle both positive and negative flags (mutually exclusive)
     check_references = config["check_references"]
     if args.check_references:
         check_references = True
     if args.no_check_references:
         check_references = False
+
+    # Get check_type_consistency - handle both positive and negative flags (mutually exclusive)
+    check_type_consistency = config.get("check_type_consistency", False)
+    if args.check_type_consistency:
+        check_type_consistency = True
+    if args.no_check_type_consistency:
+        check_type_consistency = False
 
     # Get exclude_files
     exclude_files = []
@@ -644,7 +868,20 @@ def _get_config_values(
     if not exclude_files:
         exclude_files = config["exclude_files"]
 
-    return paths, require_param_types, verbose, check_references, exclude_files
+    # Get min_short_description_length - CLI overrides config
+    min_short_description_length = config.get("min_short_description_length", 0)
+    if args.min_short_description_length is not None:
+        min_short_description_length = args.min_short_description_length
+
+    return (
+        paths,
+        require_param_types,
+        verbose,
+        check_references,
+        check_type_consistency,
+        min_short_description_length,
+        exclude_files,
+    )
 
 
 def _process_paths(
@@ -653,8 +890,10 @@ def _process_paths(
     require_param_types: bool,
     verbose: bool,
     check_references: bool,
+    check_type_consistency: bool,
+    min_short_description_length: int,
 ) -> list[str]:
-    """Process paths and check docstrings.
+    """Process paths and check docstrings in each file or directory.
 
     Args:
         paths (list[str]): List of paths to check
@@ -662,6 +901,8 @@ def _process_paths(
         require_param_types (bool): Whether parameter types are required
         verbose (bool): Whether to print verbose output
         check_references (bool): Whether to check references for errors
+        check_type_consistency (bool): Whether to compare docstring types with annotations
+        min_short_description_length (int): Minimum length for short description (0 to disable)
 
     Returns:
         list[str]: List of error messages
@@ -670,10 +911,25 @@ def _process_paths(
     for path_str in paths:
         path = Path(path_str)
         if path.is_dir():
-            errors = scan_directory(path, exclude_files, require_param_types, verbose, check_references)
+            errors = scan_directory(
+                path,
+                exclude_files,
+                require_param_types,
+                verbose,
+                check_references,
+                check_type_consistency,
+                min_short_description_length,
+            )
             all_errors.extend(errors)
         elif path.is_file() and path.suffix == ".py":
-            errors = check_file(path, require_param_types, verbose, check_references)
+            errors = check_file(
+                path,
+                require_param_types,
+                verbose,
+                check_references,
+                check_type_consistency,
+                min_short_description_length,
+            )
             all_errors.extend(errors)
         else:
             print(f"Error: {path} is not a directory or Python file")
@@ -681,7 +937,7 @@ def _process_paths(
 
 
 def main() -> None:
-    """Run the docstring checker.
+    """Run the docstring checker and exit with appropriate status code.
 
     Returns:
         None
@@ -693,7 +949,15 @@ def main() -> None:
     args = _parse_args()
 
     # Get configuration values
-    paths, require_param_types, verbose, check_references, exclude_files = _get_config_values(args, config)
+    (
+        paths,
+        require_param_types,
+        verbose,
+        check_references,
+        check_type_consistency,
+        min_short_description_length,
+        exclude_files,
+    ) = _get_config_values(args, config)
 
     # Print configuration if verbose
     if verbose:
@@ -701,6 +965,8 @@ def main() -> None:
         print(f"  Paths: {paths}")
         print(f"  Require parameter types: {require_param_types}")
         print(f"  Check references: {check_references}")
+        print(f"  Check type consistency: {check_type_consistency}")
+        print(f"  Min short description length: {min_short_description_length}")
         print(f"  Exclude files: {exclude_files}")
 
     # Check if paths is empty
@@ -717,6 +983,8 @@ def main() -> None:
         require_param_types,
         verbose,
         check_references,
+        check_type_consistency,
+        min_short_description_length,
     ):
         for error in all_errors:
             print(error)
