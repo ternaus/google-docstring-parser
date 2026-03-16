@@ -29,7 +29,7 @@ DEFAULT_CONFIG = {
     "require_param_types": False,
     "check_references": True,
     "check_type_consistency": False,
-    "min_short_description_length": 50,
+    "min_short_description_length": 0,
     "exclude_files": [],
     "verbose": False,
 }
@@ -60,7 +60,7 @@ class DocstringContext(NamedTuple):
     require_param_types: bool = False
     check_references: bool = True
     check_type_consistency: bool = False
-    min_short_description_length: int = 50
+    min_short_description_length: int = 0
     node: ast.AST | None = None
 
 
@@ -256,14 +256,15 @@ def check_type_consistency(
                 f"Parameter '{param_name}': docstring says '{doc_type}' but annotation says '{ast_type}'",
             )
 
-    # Compare Returns
+    # Compare Returns (handle both dict and string "None" from parse_google_docstring)
     returns = parsed.get("Returns")
-    if (
-        isinstance(returns, dict)
-        and (doc_ret := returns.get("type"))
-        and (ast_ret := _annotation_to_str(node.returns))
-        and _normalize_type(doc_ret) != _normalize_type(ast_ret)
-    ):
+    doc_ret: str | None = None
+    if isinstance(returns, dict):
+        doc_ret = returns.get("type")
+    elif isinstance(returns, str):
+        doc_ret = returns
+    ast_ret = _annotation_to_str(node.returns)
+    if doc_ret and ast_ret and _normalize_type(doc_ret) != _normalize_type(ast_ret):
         errors.append(
             f"Returns: docstring says '{doc_ret}' but annotation says '{ast_ret}'",
         )
@@ -657,7 +658,7 @@ def check_file(
     verbose: bool = False,
     check_references: bool = True,
     check_type_consistency: bool = False,
-    min_short_description_length: int = 50,
+    min_short_description_length: int = 0,
 ) -> list[str]:
     """Check docstrings in a Python file for parsing and validation errors.
 
@@ -710,7 +711,7 @@ def scan_directory(
     verbose: bool = False,
     check_references: bool = True,
     check_type_consistency: bool = False,
-    min_short_description_length: int = 50,
+    min_short_description_length: int = 0,
 ) -> list[str]:
     """Scan a directory for Python files and check their docstrings.
 
@@ -866,7 +867,7 @@ def _get_config_values(
         exclude_files = config["exclude_files"]
 
     # Get min_short_description_length - CLI overrides config
-    min_short_description_length = config.get("min_short_description_length", 50)
+    min_short_description_length = config.get("min_short_description_length", 0)
     if args.min_short_description_length is not None:
         min_short_description_length = args.min_short_description_length
 

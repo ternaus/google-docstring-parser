@@ -791,6 +791,22 @@ def foo(*args: int) -> None:
             1,
             "docstring says 'str' but annotation says 'int'",
         ),
+        # Returns string "None" vs annotation str - mismatch detected
+        (
+            '''
+"""Test module with Returns as string None."""
+
+def foo() -> str:
+    """Function returning str but docstring says None.
+
+    Returns:
+        None
+    """
+    return "x"
+''',
+            1,
+            "Returns: docstring says 'None' but annotation says 'str'",
+        ),
     ],
 )
 def test_check_type_consistency(
