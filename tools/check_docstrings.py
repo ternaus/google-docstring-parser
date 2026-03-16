@@ -170,10 +170,11 @@ def check_param_types(docstring_dict: dict[str, Any], require_types: bool) -> li
 
 
 def _normalize_type(type_str: str) -> str:
-    """Normalize type string for comparison (whitespace and quotes only).
+    """Normalize type string for comparison (quotes and whitespace only).
 
     Python 3.10+ typing uses list, dict, tuple, X|Y - no List, Dict, Tuple, Union.
     We do not normalize those; mismatches will be reported.
+    Internal whitespace differences (e.g., around commas, |, or brackets) are ignored.
 
     Args:
         type_str (str): Type string to normalize
@@ -181,7 +182,8 @@ def _normalize_type(type_str: str) -> str:
     Returns:
         str: Normalized type string
     """
-    return type_str.strip().strip("'\"")
+    normalized = type_str.strip().strip("'\"")
+    return re.sub(r"\s+", "", normalized)
 
 
 def _annotation_to_str(annotation: ast.expr | None) -> str | None:
@@ -828,9 +830,9 @@ def _get_config_values(
         tuple[list[str], bool, bool, bool, bool, int, list[str]]: Tuple containing:
             - List of paths to check
             - Whether to require parameter types
+            - Whether to enable verbose output
             - Whether to check references
             - Whether to check type consistency
-            - Whether to enable verbose output
             - Minimum short description length
             - List of files to exclude
     """

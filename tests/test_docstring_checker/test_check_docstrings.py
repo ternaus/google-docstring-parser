@@ -807,6 +807,25 @@ def foo() -> str:
             1,
             "Returns: docstring says 'None' but annotation says 'str'",
         ),
+        # Whitespace normalization: tuple[int, str] vs tuple[int,str] - no error
+        (
+            '''
+"""Test module with whitespace in type."""
+
+def foo(x: tuple[int, str]) -> int | None:
+    """Function with types that may have different whitespace.
+
+    Args:
+        x (tuple[int, str]): Param with spaces in docstring
+
+    Returns:
+        int | None: Union with spaces
+    """
+    return None
+''',
+            0,
+            "",
+        ),
     ],
 )
 def test_check_type_consistency(
