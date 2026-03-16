@@ -603,3 +603,136 @@ def test_check_short_description_length(
     """
     result = check_short_description_length(parsed, min_length)
     assert result == expected_errors
+
+
+@pytest.mark.parametrize(
+    "code,expected_returncode,expected_in_output",
+    [
+        # Param type match - no error
+        (
+            '''
+"""Test module with matching types."""
+
+def foo(x: int) -> str:
+    """Function with matching docstring types.
+
+    Args:
+        x (int): Param x
+
+    Returns:
+        str: Result
+    """
+    return str(x)
+''',
+            0,
+            "",
+        ),
+        # Param type mismatch - error
+        (
+            '''
+"""Test module with param type mismatch."""
+
+def foo(x: int) -> str:
+    """Function with wrong docstring type.
+
+    Args:
+        x (str): Docstring says str, annotation says int
+
+    Returns:
+        str: Result
+    """
+    return str(x)
+''',
+            1,
+            "docstring says 'str' but annotation says 'int'",
+        ),
+        # Return type mismatch - error
+        (
+            '''
+"""Test module with return type mismatch."""
+
+def foo(x: int) -> str:
+    """Function with wrong return type in docstring.
+
+    Args:
+        x (int): Param x
+
+    Returns:
+        int: Docstring says int, annotation says str
+    """
+    return str(x)
+''',
+            1,
+            "Returns: docstring says 'int' but annotation says 'str'",
+        ),
+        # Missing annotation in source - skip (no error)
+        (
+            '''
+"""Test module with no annotations."""
+
+def foo(x):
+    """Function with no type annotations in source.
+
+    Args:
+        x (int): Param x
+
+    Returns:
+        str: Result
+    """
+    return str(x)
+''',
+            0,
+            "",
+        ),
+        # self skipped - method with self, only x is compared
+        (
+            '''
+"""Test module with self param."""
+
+def method(self, x: int) -> None:
+    """Method with self.
+
+    Args:
+        x (int): Param x
+
+    Returns:
+        None
+    """
+    pass
+''',
+            0,
+            "",
+        ),
+    ],
+)
+def test_check_type_consistency(
+    code: str, expected_returncode: int, expected_in_output: str, tmp_path: Path
+) -> None:
+    """Test that check_type_consistency compares docstring types with annotations.
+
+    Args:
+        code (str): Python code to test
+        expected_returncode (int): Expected return code
+        expected_in_output (str): Expected substring in output (empty for success)
+        tmp_path (Path): Temporary directory fixture
+    """
+    temp_file = tmp_path / "test_file.py"
+    temp_file.write_text(code)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "tools.check_docstrings",
+            str(temp_file),
+            "--check-type-consistency",
+            "--min-short-description-length",
+            "0",
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == expected_returncode
+    if expected_in_output:
+        assert expected_in_output in result.stdout

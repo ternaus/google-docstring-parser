@@ -43,6 +43,9 @@ require_param_types = true
 # Whether to check references for proper format
 check_references = true
 
+# Whether to compare docstring types with function annotations
+check_type_consistency = true
+
 # List of filenames to exclude from checks
 # These can be just filenames (e.g., "conftest.py") or paths ending with the filename
 exclude_files = ["conftest.py", "__init__.py", "tests/fixtures/bad_docstrings.py"]
@@ -56,6 +59,10 @@ verbose = false
 #### Parameter Type Checking
 
 When `require_param_types = true`, the hook will check if all parameters in docstrings have their types specified. This helps ensure consistent documentation across your codebase.
+
+#### Type Consistency Checking
+
+When `check_type_consistency = true`, the hook compares docstring types (Args, Returns) with Python function annotations. Mismatches are reported (e.g., docstring says `int` but annotation says `str`). Use Python 3.10+ style: `list`, `dict`, `tuple`, `X | Y` — not `List`, `Dict`, `Tuple`, `Union`.
 
 #### Reference Checking
 
@@ -91,6 +98,7 @@ References:
 paths = ["src", "tests"]
 require_param_types = true
 check_references = true
+check_type_consistency = true
 exclude_files = ["conftest.py", "__init__.py"]
 verbose = false
 ```
@@ -116,5 +124,7 @@ Command line options:
 - `--require-param-types`: Require parameter types in docstrings
 - `--check-references`: Check references for proper format
 - `--no-check-references`: Skip reference checking
+- `--check-type-consistency`: Compare docstring types with function annotations
+- `--no-check-type-consistency`: Skip type consistency checking
 - `--exclude-files`: Comma-separated list of filenames to exclude
 - `-v, --verbose`: Enable verbose output
