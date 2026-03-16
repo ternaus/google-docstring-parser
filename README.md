@@ -119,6 +119,10 @@ References:
 
 Each reference is parsed into a dictionary with `description` and `source` keys. URLs in the source are properly handled, ensuring colons in URLs are not confused with the separator colon.
 
+## Short Description (Meta Description)
+
+The checker extracts the **short description** as the first paragraph (up to the first blank line). Multi-line first paragraphs are joined with spaces. This is useful for meta descriptions on documentation sites. SEO best practice: 120-160 characters. Use `min_short_description_length` and `max_short_description_length` to enforce bounds (0 to disable).
+
 ## Pre-commit Hook
 
 This package includes a pre-commit hook that checks if Google-style docstrings in your codebase can be parsed correctly.
@@ -148,6 +152,7 @@ require_param_types = true                   # Require parameter types in docstr
 check_references = true                      # Check references for proper format
 check_type_consistency = true                # Compare docstring types with annotations
 exclude_files = ["conftest.py", "__init__.py"] # Files to exclude from checks
-min_short_description_length = 10            # Minimum summary length; set to 0 to disable
+min_short_description_length = 50            # Minimum short description length; 0 to disable
+max_short_description_length = 160           # Maximum short description length; 0 to disable (SEO: 120-160)
 verbose = false                              # Enable verbose output
 ```

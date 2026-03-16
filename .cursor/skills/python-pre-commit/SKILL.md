@@ -33,7 +33,7 @@ pre-commit run --all-files
 
 - **Ruff**: `[tool.ruff]` in pyproject.toml (line-length 120, py310, pydocstyle google)
 - **Mypy**: `[tool.mypy]` in pyproject.toml (strict: disallow_untyped_defs, etc.)
-- **Docstrings**: `[tool.docstring_checker]` in pyproject.toml
+- **Docstrings**: `[tool.docstring_checker]` in pyproject.toml (paths, min/max_short_description_length, etc.)
 
 ## Fixing failures
 
