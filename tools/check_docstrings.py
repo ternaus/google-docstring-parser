@@ -61,6 +61,25 @@ class DocstringContext(NamedTuple):
     node: ast.AST | None = None
 
 
+_CONFIG_KEYS: dict[str, tuple[str, type]] = {
+    "paths": ("paths", list),
+    "require_param_types": ("require_param_types", bool),
+    "check_references": ("check_references", bool),
+    "check_type_consistency": ("check_type_consistency", bool),
+    "min_short_description_length": ("min_short_description_length", int),
+    "exclude_files": ("exclude_files", list),
+    "verbose": ("verbose", bool),
+}
+
+
+def _apply_tool_config(config: dict[str, Any], tool_config: dict[str, Any]) -> None:
+    """Apply tool_config values to config. Modifies config in place."""
+    for key, (config_key, converter) in _CONFIG_KEYS.items():
+        if key in tool_config:
+            raw = tool_config[key]
+            config[config_key] = raw if converter is list else converter(raw)
+
+
 def load_pyproject_config() -> dict[str, Any]:
     """Load configuration from pyproject.toml if it exists.
 
@@ -68,8 +87,6 @@ def load_pyproject_config() -> dict[str, Any]:
         dict[str, Any]: Dictionary with configuration values
     """
     config = DEFAULT_CONFIG.copy()
-
-    # Look for pyproject.toml in the current directory
     pyproject_path = Path("pyproject.toml")
     if not pyproject_path.is_file():
         return config
@@ -77,28 +94,10 @@ def load_pyproject_config() -> dict[str, Any]:
     try:
         with pyproject_path.open("rb") as f:
             pyproject_data = tomli.load(f)
-
-        # Check if our tool is configured
         tool_config = pyproject_data.get("tool", {}).get("docstring_checker", {})
         if not tool_config:
             return config
-
-        # Update config with values from pyproject.toml
-        if "paths" in tool_config:
-            config["paths"] = tool_config["paths"]
-        if "require_param_types" in tool_config:
-            config["require_param_types"] = bool(tool_config["require_param_types"])
-        if "check_references" in tool_config:
-            config["check_references"] = bool(tool_config["check_references"])
-        if "check_type_consistency" in tool_config:
-            config["check_type_consistency"] = bool(tool_config["check_type_consistency"])
-        if "min_short_description_length" in tool_config:
-            config["min_short_description_length"] = int(tool_config["min_short_description_length"])
-        if "exclude_files" in tool_config:
-            config["exclude_files"] = tool_config["exclude_files"]
-        if "verbose" in tool_config:
-            config["verbose"] = bool(tool_config["verbose"])
-
+        _apply_tool_config(config, tool_config)
     except Exception as e:
         print(f"Warning: Failed to load configuration from pyproject.toml: {e}")
 

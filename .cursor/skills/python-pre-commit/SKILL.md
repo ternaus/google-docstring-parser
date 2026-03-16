@@ -25,6 +25,10 @@ pre-commit run --all-files
 | codespell | - | Spell check |
 | pre-commit-hooks | - | AST, TOML, JSON, etc. |
 
+## Lint rules
+
+**Do not disable checks that force refactoring for better code** (e.g. C901 complexity). Fix the code instead.
+
 ## Config locations
 
 - **Ruff**: `[tool.ruff]` in pyproject.toml (line-length 120, py310, pydocstyle google)
