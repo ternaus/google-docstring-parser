@@ -32,5 +32,5 @@ Requires `TWINE_USERNAME=__token__` and `TWINE_PASSWORD` (PyPI token).
 ## CI job (upload_to_pypi.yml)
 
 - Trigger: `release: types: [published]`
-- Removes `tests` and `benchmark` before build
+- Builds with Hatchling; archive contents are selected in `pyproject.toml`
 - Uses `secrets.PYPI_API_TOKEN`
