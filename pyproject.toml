@@ -1,6 +1,6 @@
 [build-system]
-build-backend = "setuptools.build_meta"
-requires = [ "setuptools>=84.2.1" ]
+build-backend = "hatchling.build"
+requires = [ "hatchling" ]
 
 [project]
 name = "google-docstring-parser"
@@ -41,10 +41,15 @@ optional-dependencies.dev = [
   "pytest>=9.2",
 ]
 
-[tool.setuptools]
-packages = [ "google_docstring_parser", "tools" ]
-package-data.google_docstring_parser = [ "*.md", "py.typed" ]
-exclude-package-data."*" = [ "tests*" ]
+[tool.hatch]
+build.targets.wheel.packages = [ "google_docstring_parser", "tools" ]
+build.targets.sdist.only-include = [
+  "google_docstring_parser",
+  "tools",
+  "tests",
+  ".pre-commit-hooks.yaml",
+  "requirements-dev.txt"
+]
 
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.

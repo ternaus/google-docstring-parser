@@ -401,11 +401,7 @@ def missing_docstring_function(param1):
 
     # Create an empty pyproject.toml to test with no configuration
     empty_pyproject = tmp_path / "pyproject.toml"
-    empty_pyproject.write_text('''
-[build-system]
-requires = ["setuptools>=42", "wheel"]
-build-backend = "setuptools.build_meta"
-''')
+    empty_pyproject.write_text("", encoding="utf-8")
 
     # Get the path to the module we're testing
     project_root = Path(__file__).parent.parent.parent
@@ -477,10 +473,6 @@ def another_function(param1):
     # Create a pyproject.toml that only includes the src directory
     pyproject = tmp_path / "pyproject.toml"
     pyproject.write_text('''
-[build-system]
-requires = ["setuptools>=42", "wheel"]
-build-backend = "setuptools.build_meta"
-
 [tool.docstring_checker]
 paths = ["src"]
 require_param_types = true
@@ -536,10 +528,6 @@ def missing_docstring_function(param1):
     # Create a pyproject.toml with an explicit empty paths list
     empty_pyproject = tmp_path / "pyproject.toml"
     empty_pyproject.write_text('''
-[build-system]
-requires = ["setuptools>=42", "wheel"]
-build-backend = "setuptools.build_meta"
-
 [tool.docstring_checker]
 paths = []
 ''')
