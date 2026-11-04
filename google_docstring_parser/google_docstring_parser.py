@@ -451,11 +451,21 @@ def _parse_returns_section(sections: dict[str, str], *, validate_types: bool) ->
             - The string 'None' if the section only contains 'None'
             - An empty dict if no return information is found
     """
-    if (
-        "Returns" not in sections
-        or not (returns_lines := sections["Returns"].split("\n"))
-        or not (return_match := re.match(r"^(?:([^:]+):\s*)?(.*)$", returns_lines[0].strip()))
-    ):
+    if "Returns" not in sections or not (returns_lines := sections["Returns"].split("\n")):
+        return {}
+
+    annotation_line = returns_lines[0].strip()
+    for continuation in returns_lines[1:]:
+        if ":" in annotation_line:
+            break
+        if not (
+            annotation_line.endswith("|")
+            or annotation_line.count("[") > annotation_line.count("]")
+            or continuation.lstrip().startswith("|")
+        ):
+            break
+        annotation_line = f"{annotation_line} {continuation.strip()}"
+    if not (return_match := re.match(r"^(?:([^:]+):\s*)?(.*)$", annotation_line)):
         return {}
 
     return_type = return_match[1]
