@@ -509,7 +509,9 @@ def _split_return_header(text: str) -> tuple[str | None, str]:
     row, column = separator
     if row == 0:
         annotation = first_line[:column].strip()
-        return (annotation, first_line[column + 1 :].strip()) if annotation else (None, first_line)
+        if not annotation:
+            return None, first_line
+        return annotation, first_line[column + 1 :].strip()
     candidate = tokenize.untokenize(prefix)
     try:
         expression = ast.parse(candidate.strip(), mode="eval").body
@@ -541,9 +543,10 @@ def _process_returns_with_validation(
     return_type, return_desc = _split_return_header(sections["Returns"])
     if return_type and validate_types:
         _validate_type_with_error_handling(return_type, result, collect_errors)
-    result["Returns"] = (
-        "None" if not return_type and return_desc == "None" else {"type": return_type, "description": return_desc}
-    )
+    if not return_type and return_desc == "None":
+        result["Returns"] = "None"
+    else:
+        result["Returns"] = {"type": return_type, "description": return_desc}
 
 
 def _process_references_section(sections: dict[str, str], result: dict[str, Any]) -> None:

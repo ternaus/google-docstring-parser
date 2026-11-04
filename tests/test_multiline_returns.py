@@ -80,13 +80,14 @@ def test_checker_compares_wrapped_types(
 ) -> None:
     source = tmp_path / "example.py"
     source.write_text(
-        '"""Example module."""\n'
-        f'def choose() -> {annotation}:\n'
-        '    """Choose a result.\n\n'
-        '    Returns:\n'
-        f'        {documented}: Result.\n'
-        '    """\n'
-        '    return 137\n',
+        f'''def choose() -> {annotation}:
+    """Choose a result.
+
+    Returns:
+        {documented}: Result.
+    """
+    return 137
+''',
         encoding="utf-8",
     )
     errors = check_file(source, require_param_types=True, check_type_consistency=True)
@@ -99,18 +100,20 @@ def test_checker_compares_wrapped_types(
 
 
 @pytest.mark.parametrize(
-    ("annotation", "error_type"),
+    ("annotation", "expected_type", "error_type"),
     [
-        ("list(int)", BracketValidationError),
-        ("list[\n    dict\n]", InvalidTypeAnnotationError),
+        ("list(int)", "list(int)", BracketValidationError),
+        ("list[\n    dict\n]", "list[dict]", InvalidTypeAnnotationError),
     ],
 )
-def test_return_validation_error_modes(annotation: str, error_type: type[InvalidTypeAnnotationError]) -> None:
+def test_return_validation_error_modes(
+    annotation: str, expected_type: str, error_type: type[InvalidTypeAnnotationError]
+) -> None:
     docstring = f"Example.\n\nReturns:\n    {annotation}: Result."
 
     collected = parse_google_docstring(docstring)
     assert len(collected["errors"]) == 1
-    assert collected["Returns"]["type"] is not None
+    assert collected["Returns"] == {"type": expected_type, "description": "Result."}
 
     with pytest.raises(error_type):
         parse_google_docstring(docstring, collect_errors=False)
@@ -125,5 +128,4 @@ def test_argument_bracket_errors_are_collected() -> None:
 
     parsed = parse_google_docstring(docstring)
 
-    assert len(parsed["errors"]) == 1
-    assert "bracket" in parsed["errors"][0].lower()
+    assert parsed["errors"] == ["Mismatched bracket pair"]
