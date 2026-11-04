@@ -26,7 +26,6 @@ repos:
       - id: check-xml
       - id: detect-private-key
       - id: forbid-new-submodules
-      # - id: forbid-submodules
       - id: mixed-line-ending
       - id: destroyed-symlinks
       - id: fix-byte-order-marker
@@ -41,31 +40,26 @@ repos:
       - id: python-check-mock-methods
       - id: python-use-type-annotations
       - id: python-check-blanket-noqa
-      - id: python-use-type-annotations
       - id: text-unicode-replacement-char
   - repo: https://github.com/codespell-project/codespell
-    rev: v2.4.1
+    rev: v2.4.3
     hooks:
       - id: codespell
-        additional_dependencies: ["tomli"]
   - repo: https://github.com/tox-dev/pyproject-fmt
-    rev: "v2.11.1"
+    rev: "v2.30.3"
     hooks:
       - id: pyproject-fmt
-        additional_dependencies: ["tomli"]
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    # Ruff version.
-    rev: v0.14.11
+    rev: v0.17.3
     hooks:
-      # Run the linter with configuration from pyproject.toml
-      - id: ruff
+      - id: ruff-check
         exclude: '__pycache__/'
         args: [ --fix ]
 
       # Run the formatter.
       - id: ruff-format
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.19.1
+    rev: v2.4.1
     hooks:
       - id: mypy
         files: ^(google_docstring_parser|tests)/
@@ -83,4 +77,4 @@ repos:
         require_serial: true
         # Configuration is in pyproject.toml
         args: []
-        additional_dependencies: ["tomli>=2.0.0", "docstring-parser>=0.16"]
+        additional_dependencies: ["docstring-parser>=0.18"]

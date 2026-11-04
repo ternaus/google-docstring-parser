@@ -166,16 +166,10 @@ def test_config_from_pyproject_toml() -> None:
     assert "Max short description length:" in result.stdout
 
 
-def test_missing_param_types_in_real_code() -> None:
+def test_missing_param_types_in_real_code(tmp_path: Path) -> None:
     """Test that the checker detects missing parameter types in a real file with missing types."""
-    # Create a temporary file with a missing parameter type
-    temp_dir = Path(__file__).parent
-    temp_file = temp_dir / "temp_missing_type.py"
-
-    try:
-        # Write a file with a missing parameter type
-        with open(temp_file, "w") as f:
-            f.write('''
+    temp_file = tmp_path / "missing_type.py"
+    temp_file.write_text('''
 """Test module with missing parameter type."""
 
 def function_with_missing_type(param1):
@@ -188,32 +182,23 @@ def function_with_missing_type(param1):
         None
     """
     return None
-''')
+''', encoding="utf-8")
 
-        # Run the checker on the temporary file with require_param_types
-        result = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "tools.check_docstrings",
-                str(temp_file),
-                "--require-param-types",
-                "--verbose",
-            ],
-            capture_output=True,
-            text=True,
-        )
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "tools.check_docstrings",
+            str(temp_file),
+            "--require-param-types",
+            "--verbose",
+        ],
+        capture_output=True,
+        text=True,
+    )
 
-        # Check that the command failed
-        assert result.returncode == 1, "Checker should fail when types are required"
-
-        # Check that the output contains missing type errors
-        assert "Parameter 'param1' is missing a type" in result.stdout, "Should report which parameter is missing a type"
-
-    finally:
-        # Clean up the temporary file
-        if temp_file.exists():
-            temp_file.unlink()
+    assert result.returncode == 1, "Checker should fail when types are required"
+    assert "Parameter 'param1' is missing a type" in result.stdout, "Should report which parameter is missing a type"
 
 
 @pytest.mark.parametrize(

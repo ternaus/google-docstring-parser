@@ -16,7 +16,7 @@ Our development approach follows this priority order:
 
 ## Python Development
 
-- We use Python 3.10 typing
+- We support Python 3.11 and newer
 - For tests we use pytest and parametrize
 - We use Google type docstrings
 - To check syntax we do not run ruff, flake8, but just run `pre-commit run --all-files`

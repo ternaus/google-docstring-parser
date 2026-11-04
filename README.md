@@ -6,6 +6,8 @@
 
 A Python package for parsing Google-style docstrings into structured dictionaries.
 
+Requires Python 3.11 or newer.
+
 ## License Information
 
 This package is available under a custom license:
@@ -25,7 +27,7 @@ pip install google-docstring-parser
 ```python
 from google_docstring_parser import parse_google_docstring
 
-docstring = '''Apply elastic deformation to images, masks, bounding boxes, and keypoints.
+docstring = """Apply elastic deformation to images, masks, bounding boxes, and keypoints.
 
 This transformation introduces random elastic distortions to the input data. It's particularly
 useful for data augmentation in training deep learning models, especially for tasks like
@@ -47,7 +49,7 @@ References:
     - Implementation details: https://example.com/elastic-transform
 Returns:
     dict[str, Any]: Some info here
-'''
+"""
 
 parsed = parse_google_docstring(docstring)
 print(parsed)
@@ -56,35 +58,28 @@ print(parsed)
 Output:
 ```python
 {
-    'Description': 'Apply elastic deformation to images, masks, bounding boxes, and keypoints.\n\nThis transformation introduces random elastic distortions to the input data. It\'s particularly\nuseful for data augmentation in training deep learning models, especially for tasks like\nimage segmentation or object detection where you want to maintain the relative positions of\nfeatures while introducing realistic deformations.',
-    'Args': [
+    "Description": "Apply elastic deformation to images, masks, bounding boxes, and keypoints.\n\nThis transformation introduces random elastic distortions to the input data. It's particularly\nuseful for data augmentation in training deep learning models, especially for tasks like\nimage segmentation or object detection where you want to maintain the relative positions of\nfeatures while introducing realistic deformations.",
+    "Args": [
         {
-            'name': 'alpha',
-            'type': 'float',
-            'description': 'Scaling factor for the random displacement fields. Higher values result in\nmore pronounced distortions. Default: 1.0'
+            "name": "alpha",
+            "type": "float",
+            "description": "Scaling factor for the random displacement fields. Higher values result in\nmore pronounced distortions. Default: 1.0",
         },
         {
-            'name': 'sigma',
-            'type': 'float',
-            'description': 'Standard deviation of the Gaussian filter used to smooth the displacement\nfields. Higher values result in smoother, more global distortions. Default: 50.0'
-        }
-    ],
-    'Example': '>>> import albumentations as A\n>>> transform = A.ElasticTransform(alpha=1, sigma=50, p=0.5)',
-    'References': [
-        {
-            'description': 'Original paper',
-            'source': 'Simard, P. Y., et al. "Best practices for convolutional neural networks applied to visual document analysis." ICDAR 2003'
+            "name": "sigma",
+            "type": "float",
+            "description": "Standard deviation of the Gaussian filter used to smooth the displacement\nfields. Higher values result in smoother, more global distortions. Default: 50.0",
         },
-        {
-            'description': 'Implementation details',
-            'source': 'https://example.com/elastic-transform'
-        }
     ],
-    'Returns':
+    "Example": ">>> import albumentations as A\n>>> transform = A.ElasticTransform(alpha=1, sigma=50, p=0.5)",
+    "References": [
         {
-            "type": "dict[str, Any]",
-            "description": "Some info here"
-        }
+            "description": "Original paper",
+            "source": 'Simard, P. Y., et al. "Best practices for convolutional neural networks applied to visual document analysis." ICDAR 2003',
+        },
+        {"description": "Implementation details", "source": "https://example.com/elastic-transform"},
+    ],
+    "Returns": {"type": "dict[str, Any]", "description": "Some info here"},
 }
 ```
 
@@ -95,6 +90,20 @@ Output:
 - Preserves other sections like Examples, Notes, etc.
 - Handles multi-line descriptions and indentation properly
 - Properly parses and validates References sections with special handling for URLs
+
+### Wrapped return annotations
+
+Long return types can span several lines. The parser accepts wrapped unions, generics, and parenthesized types:
+
+```text
+Returns:
+    dict[
+        str,
+        list[int | str],
+    ]: Results grouped by name.
+```
+
+The parsed type is `dict[str, list[int | str]]`. Quoted colons and brackets inside `Literal` values are preserved, and wrapped prose remains untyped. The checker compares type expressions while preserving spaces inside literal values.
 
 ### References
 
@@ -136,7 +145,6 @@ To use this hook in another project, add the following to your `.pre-commit-conf
   rev: v0.0.1  # Use the latest version
   hooks:
     - id: check-google-docstrings
-      additional_dependencies: ["tomli>=2.0.0"]  # Required for pyproject.toml configuration
 ```
 
 ### Configuration

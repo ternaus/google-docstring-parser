@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# Copyright (c) 2025 Vladimir Iglovikov
 """Check that docstrings in specified folders can be parsed.
 
 This script scans Python files in specified directories and checks if their
@@ -11,10 +12,9 @@ import argparse
 import ast
 import re
 import sys
+import tomllib
 from pathlib import Path
 from typing import Any, NamedTuple
-
-import tomli
 
 from google_docstring_parser.google_docstring_parser import (
     parse_google_docstring,
@@ -105,7 +105,7 @@ def load_pyproject_config() -> dict[str, Any]:
 
     try:
         with pyproject_path.open("rb") as f:
-            pyproject_data = tomli.load(f)
+            pyproject_data = tomllib.load(f)
         tool_config = pyproject_data.get("tool", {}).get("docstring_checker", {})
         if not tool_config:
             return config
@@ -174,11 +174,11 @@ def check_param_types(docstring_dict: dict[str, Any], require_types: bool) -> li
 
 
 def _normalize_type(type_str: str) -> str:
-    """Normalize type string for comparison (quotes and whitespace only).
+    """Compare type expressions without discarding significant literal whitespace.
 
-    Python 3.10+ typing uses list, dict, tuple, X|Y - no List, Dict, Tuple, Union.
+    Python 3.11+ typing uses list, dict, tuple, X|Y - no List, Dict, Tuple, Union.
     We do not normalize those; mismatches will be reported.
-    Internal whitespace differences (e.g., around commas, |, or brackets) are ignored.
+    Syntax formatting and quote style are ignored; string literal values are preserved.
 
     Args:
         type_str (str): Type string to normalize
@@ -186,8 +186,13 @@ def _normalize_type(type_str: str) -> str:
     Returns:
         str: Normalized type string
     """
-    normalized = type_str.strip().strip("'\"")
-    return re.sub(r"\s+", "", normalized)
+    try:
+        expression = ast.parse(f"({type_str})", mode="eval").body
+        if isinstance(expression, ast.Constant) and isinstance(expression.value, str):
+            expression = ast.parse(expression.value, mode="eval").body
+    except SyntaxError:
+        return type_str.strip()
+    return ast.dump(expression)
 
 
 def _annotation_to_str(annotation: ast.expr | None) -> str | None:
@@ -697,6 +702,7 @@ def _process_docstring(context: DocstringContext, docstring: str) -> list[str]:
 
 def check_file(
     file_path: Path,
+    *,
     require_param_types: bool = False,
     verbose: bool = False,
     check_references: bool = True,
@@ -752,6 +758,7 @@ def check_file(
 
 def scan_directory(
     directory: Path,
+    *,
     exclude_files: list[str] | None = None,
     require_param_types: bool = False,
     verbose: bool = False,
@@ -796,12 +803,12 @@ def scan_directory(
             errors.extend(
                 check_file(
                     py_file,
-                    require_param_types,
-                    verbose,
-                    check_references,
-                    check_type_consistency,
-                    min_short_description_length,
-                    max_short_description_length,
+                    require_param_types=require_param_types,
+                    verbose=verbose,
+                    check_references=check_references,
+                    check_type_consistency=check_type_consistency,
+                    min_short_description_length=min_short_description_length,
+                    max_short_description_length=max_short_description_length,
                 ),
             )
     return errors
@@ -946,6 +953,7 @@ def _get_config_values(
 
 def _process_paths(
     paths: list[str],
+    *,
     exclude_files: list[str],
     require_param_types: bool,
     verbose: bool,
@@ -975,24 +983,24 @@ def _process_paths(
         if path.is_dir():
             errors = scan_directory(
                 path,
-                exclude_files,
-                require_param_types,
-                verbose,
-                check_references,
-                check_type_consistency,
-                min_short_description_length,
-                max_short_description_length,
+                exclude_files=exclude_files,
+                require_param_types=require_param_types,
+                verbose=verbose,
+                check_references=check_references,
+                check_type_consistency=check_type_consistency,
+                min_short_description_length=min_short_description_length,
+                max_short_description_length=max_short_description_length,
             )
             all_errors.extend(errors)
         elif path.is_file() and path.suffix == ".py":
             errors = check_file(
                 path,
-                require_param_types,
-                verbose,
-                check_references,
-                check_type_consistency,
-                min_short_description_length,
-                max_short_description_length,
+                require_param_types=require_param_types,
+                verbose=verbose,
+                check_references=check_references,
+                check_type_consistency=check_type_consistency,
+                min_short_description_length=min_short_description_length,
+                max_short_description_length=max_short_description_length,
             )
             all_errors.extend(errors)
         else:
@@ -1045,13 +1053,13 @@ def main() -> None:
 
     if all_errors := _process_paths(
         paths,
-        exclude_files,
-        require_param_types,
-        verbose,
-        check_references,
-        check_type_consistency,
-        min_short_description_length,
-        max_short_description_length,
+        exclude_files=exclude_files,
+        require_param_types=require_param_types,
+        verbose=verbose,
+        check_references=check_references,
+        check_type_consistency=check_type_consistency,
+        min_short_description_length=min_short_description_length,
+        max_short_description_length=max_short_description_length,
     ):
         for error in all_errors:
             print(error)

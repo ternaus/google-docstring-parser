@@ -15,7 +15,6 @@ To use this hook in another project, add the following to your `.pre-commit-conf
   rev: v0.0.1  # Use the latest version
   hooks:
     - id: check-google-docstrings
-      additional_dependencies: ["tomli>=2.0.0"]  # Required for pyproject.toml configuration
 ```
 
 ### Installation
@@ -68,7 +67,7 @@ When `require_param_types = true`, the hook will check if all parameters in docs
 
 #### Type Consistency Checking
 
-When `check_type_consistency = true`, the hook compares docstring types (Args, Returns) with Python function annotations. Mismatches are reported (e.g., docstring says `int` but annotation says `str`). Use Python 3.10+ style: `list[str]`, `dict[str, Any]`, `tuple[int, str]`, `X | Y` — not `List`, `Dict`, `Tuple`, `Union`.
+When `check_type_consistency = true`, the hook compares docstring types (Args, Returns) with Python function annotations. Mismatches are reported (e.g., docstring says `int` but annotation says `str`). Use Python 3.11+ style: `list[str]`, `dict[str, Any]`, `tuple[int, str]`, `X | Y` — not `List`, `Dict`, `Tuple`, `Union`.
 
 #### Reference Checking
 
@@ -117,7 +116,6 @@ verbose = false
   rev: v0.0.1
   hooks:
     - id: check-google-docstrings
-      additional_dependencies: ["tomli>=2.0.0"]
 ```
 
 ### Command Line Usage
