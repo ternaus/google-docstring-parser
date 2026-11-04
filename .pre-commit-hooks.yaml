@@ -12,6 +12,3 @@
   pass_filenames: false
   require_serial: true
   args: []  # Default empty args
-  # Define configuration options
-  minimum_pre_commit_version: "2.9.0"  # Required for additional_dependencies
-  additional_dependencies: ["tomli>=2.0.0"]

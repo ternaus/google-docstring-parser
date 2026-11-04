@@ -112,7 +112,7 @@ class InvalidTypeAnnotationError(ValueError):
         super().__init__(message)
 
 
-class BracketValidationError(ValueError):
+class BracketValidationError(InvalidTypeAnnotationError):
     """Error raised when brackets in a type annotation are not balanced or mismatched.
 
     Contains specific error types for different bracket validation issues.
@@ -315,7 +315,7 @@ def replace_string_literals(match: Match[AnyStr], literals: list[str]) -> str:
     """
     placeholder = str(match.group(0))
     if placeholder.startswith("STR_LITERAL_"):
-        idx = int(placeholder.split("_")[-1])
+        idx = int(placeholder.rsplit("_", maxsplit=1)[-1])
         if idx < len(literals):
             return literals[idx]
     return placeholder

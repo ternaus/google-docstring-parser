@@ -18,7 +18,10 @@ This module provides functions to parse Google-style docstrings into structured 
 
 from __future__ import annotations
 
+import ast
+import io
 import re
+import tokenize
 from typing import TYPE_CHECKING, Any
 
 from docstring_parser import parse
@@ -438,42 +441,86 @@ def _process_args_with_validation(
     result["Args"] = args
 
 
-def _parse_returns_section(sections: dict[str, str], *, validate_types: bool) -> dict[str, str] | str:
-    """Process the Returns section of a docstring into type and description.
+def _return_annotation_tokens(text: str) -> tuple[list[tuple[int, str]], tuple[int, int] | None]:
+    """Find the return separator outside quoted literals and nested brackets.
 
     Args:
-        sections (dict[str, str]): The sections dictionary
-        validate_types (bool): Whether to validate type annotations
+        text (str): Returns section contents.
 
     Returns:
-        dict[str, str] | str: Either:
-            - A dictionary with 'type' and 'description' keys
-            - The string 'None' if the section only contains 'None'
-            - An empty dict if no return information is found
+        tuple[list[tuple[int, str]], tuple[int, int] | None]: Prefix tokens and zero-based separator position.
     """
-    if (
-        "Returns" not in sections
-        or not (returns_lines := sections["Returns"].split("\n"))
-        or not (return_match := re.match(r"^(?:([^:]+):\s*)?(.*)$", returns_lines[0].strip()))
-    ):
-        return {}
+    prefix: list[tuple[int, str]] = []
+    depth = 0
+    ignored = {tokenize.NL, tokenize.NEWLINE, tokenize.INDENT, tokenize.DEDENT, tokenize.ENDMARKER, tokenize.COMMENT}
+    # An implicit group permits wrapping between any two annotation tokens, regardless of indentation.
+    tokens = tokenize.generate_tokens(io.StringIO(f"(\n{text}").readline)
+    next(tokens)
+    try:
+        for token in tokens:
+            if token.type == tokenize.NL and depth == 0 and not token.line.strip():
+                break
+            if token.type == tokenize.OP:
+                if token.string in "([{":
+                    depth += 1
+                elif token.string in ")]}":
+                    depth -= 1
+                elif token.string == ":" and depth == 0:
+                    return prefix, (token.start[0] - 2, token.start[1])
+            if token.type not in ignored:
+                prefix.append((token.type, token.string))
+    except (tokenize.TokenError, IndentationError):
+        return prefix, None
+    return prefix, None
 
-    return_type = return_match[1]
-    return_desc = return_match[2].strip()
 
-    # Special case: Returns section just contains "None"
-    if not return_type and return_desc == "None":
-        return "None"
+def _is_return_type(expression: ast.expr) -> bool:
+    """Distinguish Python type expressions from wrapped numeric or prose content.
 
-    # Validate type if present
-    if return_type and validate_types:
-        validate_type_annotation(return_type)
+    Args:
+        expression (ast.expr): Parsed candidate return annotation.
 
-        # Check for nested types
-        if "[" in return_type and "]" in return_type:
-            check_text_for_bare_collections(return_type)
+    Returns:
+        bool: Whether the candidate has the shape of a type expression.
+    """
+    match expression:
+        case ast.Name() | ast.Attribute() | ast.Subscript() | ast.Constant(value=str() | None):
+            return True
+        case ast.BinOp(left=left, op=ast.BitOr(), right=right):
+            return _is_return_type(left) and _is_return_type(right)
+        case _:
+            return False
 
-    return {"type": return_type, "description": return_desc.rstrip()}
+
+def _split_return_header(text: str) -> tuple[str | None, str]:
+    """Parse a wrapped type expression while preserving untyped prose.
+
+    Args:
+        text (str): Returns section contents.
+
+    Returns:
+        tuple[str | None, str]: Return annotation and its first description line.
+    """
+    lines = text.split("\n")
+    first_line = lines[0].strip()
+    prefix, separator = _return_annotation_tokens(text)
+    if separator is None:
+        return None, first_line
+    row, column = separator
+    if row == 0:
+        annotation = first_line[:column].strip()
+        if not annotation:
+            return None, first_line
+        return annotation, first_line[column + 1 :].strip()
+    candidate = tokenize.untokenize(prefix)
+    try:
+        expression = ast.parse(candidate.strip(), mode="eval").body
+        if not _is_return_type(expression):
+            return None, first_line
+        annotation = ast.unparse(expression)
+    except (SyntaxError, ValueError, RecursionError):
+        return None, first_line
+    return annotation, lines[row][column + 1 :].strip()
 
 
 def _process_returns_with_validation(
@@ -493,16 +540,13 @@ def _process_returns_with_validation(
     if "Returns" not in sections:
         return
 
-    try:
-        returns = _parse_returns_section(sections, validate_types=validate_types)
-        if isinstance(returns, dict) and returns.get("type") and validate_types:
-            _validate_type_with_error_handling(returns["type"], result, collect_errors)
-        result["Returns"] = returns
-    except InvalidTypeAnnotationError as e:
-        if collect_errors:
-            result["errors"].append(str(e))
-        else:
-            raise
+    return_type, return_desc = _split_return_header(sections["Returns"])
+    if return_type and validate_types:
+        _validate_type_with_error_handling(return_type, result, collect_errors)
+    if not return_type and return_desc == "None":
+        result["Returns"] = "None"
+    else:
+        result["Returns"] = {"type": return_type, "description": return_desc}
 
 
 def _process_references_section(sections: dict[str, str], result: dict[str, Any]) -> None:
